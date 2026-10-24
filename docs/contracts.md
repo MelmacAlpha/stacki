@@ -133,6 +133,14 @@ restarts the preview on success or failure. `dev:stop` waits for the owned proce
 to exit; external servers remain untouched. Starting/offline previews hide any stale iframe
 URL and expose loading or retry controls instead of a blank connection-error document.
 
+`git:resolveMerge` accepts the existing whole-file and per-change choices, plus a validated
+text resolution containing the final edited source, the expected target branch and a canonical
+snapshot of every original conflict part. Text results prepare the merge without committing,
+then recheck the branch, conflicted file set and each snapshot before writing. A changed merge
+is aborted for fresh review; a clean rerun cannot silently discard manual overrides. The result
+editor splits independently combined inline edits into individual choices for display only;
+the existing three-way merge engine remains the source of automatic combinations.
+
 `git:pull` takes a project path and the currently displayed branch. It fetches that branch
 from `origin` with the project's publishing account, then merges through the existing
 `WireMergeOutcome` contract. A missing remote branch or changed local branch stops the pull;

@@ -1,3 +1,5 @@
+// Goal: verify interactive preview and return to the page actually visited.
+// Method: navigate the real iframe and wait for destination content before exiting.
 import assert from 'node:assert/strict';
 import type { Page } from 'playwright';
 
@@ -49,6 +51,7 @@ export async function checkPreviewNavigation(page: Page) {
   await page.getByRole('button', { name: 'Preview the site', exact: true }).click();
   const preview = page.frameLocator('iframe[title="Site preview (interactive)"]');
   await preview.locator('h1').waitFor();
+  const homeHeading = await preview.locator('h1').innerText();
   // Exercise a real same-site navigation without changing the site's source.
   await preview.locator('body').evaluate((body) => {
     const link = document.createElement('a');
@@ -62,8 +65,11 @@ export async function checkPreviewNavigation(page: Page) {
   await page.locator('.page-switch-label').filter({ hasText: '404' }).waitFor();
   await page.getByRole('button', { name: 'Preview the site', exact: true }).click();
   await preview.getByRole('link', { name: 'Back to home', exact: true }).click();
-  await preview.locator('h1').waitFor();
-  await preview.locator('h1').click();
+  // Astro keeps the outgoing heading visible during navigation. Waiting for any
+  // h1 could press Escape on the 404 page before the home page replaces it.
+  const destination = preview.getByRole('heading', { name: homeHeading, exact: true });
+  await destination.waitFor();
+  await destination.click();
   await page.keyboard.press('Escape');
   await page.locator('.page-switch-label').filter({ hasText: 'index' }).waitFor();
 }

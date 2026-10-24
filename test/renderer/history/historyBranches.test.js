@@ -178,6 +178,8 @@ test('Git controls stay open in the panel and preserve repository actions', asyn
     assert.ok(document.querySelector('[title="Merge feature into main"]'));
     assert.ok(document.querySelector('[title="Delete feature"]'));
     assert.ok(button('Commit all changes'));
+    assert.equal(document.querySelector('.git-commit-destination').textContent, 'Commit to main');
+    assert.ok(document.querySelector('.git-commit-destination .history-graph-color-0'));
     assert.equal(button('Publish to GitHub…'), undefined);
     assert.equal(
       [...document.querySelectorAll('h3')].some((heading) => heading.textContent === 'GitHub'),
@@ -374,6 +376,11 @@ test('Git controls stay open in the panel and preserve repository actions', asyn
     assert.match(requests.filter(([kind]) => kind === 'toast').at(-1)[1], /waiting on main/);
     info = { ...info, branch: 'feature', head: 'b'.repeat(40) };
     await render();
+    assert.equal(
+      document.querySelector('.git-commit-destination').textContent,
+      'Commit to feature',
+    );
+    assert.ok(document.querySelector('.git-commit-destination .history-graph-color-1'));
     assert.equal(document.querySelector('[aria-label="feature, current branch"]').disabled, true);
     assert.equal(document.querySelector('.history-branch-row.active .row-action') === null, true);
     assert.ok(document.querySelector('[title="Merge main into feature"]'));

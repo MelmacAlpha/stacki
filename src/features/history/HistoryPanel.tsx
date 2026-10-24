@@ -34,6 +34,8 @@ export default function HistoryPanel(props: HistoryPanelProps) {
             <HistoryTimeline
               projectPath={props.project.path}
               branch={branch}
+              trunk={props.gitInfo.trunk ?? 'main'}
+              branches={props.gitInfo.branches}
               head={head}
               userEmail={userEmail}
               previewRef={props.previewRef}

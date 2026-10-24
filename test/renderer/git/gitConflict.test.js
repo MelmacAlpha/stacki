@@ -81,7 +81,13 @@ test('merge dialog sends exact selected choices and locks binary choices while b
   const output = repoPath('node_modules/.stacki-test/git-conflict.cjs');
   fs.mkdirSync(path.dirname(output), { recursive: true });
   buildSync({
-    entryPoints: [repoPath('src/features/git/MergeConflictModal.tsx')],
+    stdin: {
+      contents: `export {default} from './src/features/git/MergeConflictModal';
+      export {EditorView} from '@codemirror/view';
+      export {undo, redo} from '@codemirror/commands';`,
+      resolveDir: repoPath('.'),
+      loader: 'tsx',
+    },
     outfile: output,
     bundle: true,
     format: 'cjs',
@@ -108,7 +114,7 @@ test('merge dialog sends exact selected choices and locks binary choices while b
   const React = require('react');
   const { act } = React;
   const { createRoot } = require('react-dom/client');
-  const Modal = require(output).default;
+  const { default: Modal, EditorView, undo, redo } = require(output);
   const root = createRoot(document.getElementById('root'));
   const value = conflict([
     file([clash, { ...clash, merged: 'combined' }]),
@@ -132,16 +138,51 @@ test('merge dialog sends exact selected choices and locks binary choices while b
     [...document.querySelectorAll(selector)].find((entry) => entry.textContent.trim() === label);
   try {
     await show();
-    assert.equal(document.querySelectorAll('.conflict-hunk').length, 2);
-    await click(
-      button('.conflict-hunk:first-child button', 'Both') ||
-        button('.conflict-hunk button', 'Both'),
+    assert.equal(document.querySelectorAll('.merge-result-editor .cm-editor').length, 1);
+    assert.equal(document.querySelector('.modal-footer .primary').disabled, true);
+    const view = EditorView.findFromDOM(document.querySelector('.merge-result-editor .cm-editor'));
+    assert.ok(view);
+    assert.equal(view.state.doc.toString(), 'ours\ncombined');
+    await act(async () =>
+      view.dispatch({
+        changes: {
+          from: 0,
+          to: view.state.doc.length,
+          insert: 'Manual replacement across both changes',
+        },
+      }),
     );
+    assert.equal(button('.merge-change-options button', 'Keep main').disabled, true);
+    await act(async () => undo(view));
+    assert.equal(button('.merge-change-options button', 'Keep main').disabled, false);
+    assert.equal(view.state.doc.toString(), 'ours\ncombined');
+
+    await click(button('.merge-change-options button', 'Keep both blocks'));
+    assert.equal(view.state.doc.toString(), 'ours\ntheirs\ncombined');
+    await act(async () =>
+      view.dispatch({ changes: { from: view.state.doc.length, insert: '\n<!-- Override -->' } }),
+    );
+    assert.match(view.state.doc.toString(), /Override/);
+    await act(async () => undo(view));
+    assert.equal(view.state.doc.toString(), 'ours\ntheirs\ncombined');
+    await act(async () => redo(view));
+    assert.match(view.state.doc.toString(), /Override/);
     await click(document.querySelector('[title="image.png"]'));
     await click(button('.conflict-whole button', 'topic'));
     await click(document.querySelector('.modal-footer .primary'));
-    assert.deepEqual(resolutions[0], { 'a.astro': ['both', 'merged'], 'image.png': 'theirs' });
+    assert.equal(resolutions[0]['a.astro'].kind, 'text');
+    assert.equal(resolutions[0]['a.astro'].text, 'ours\ntheirs\ncombined\n<!-- Override -->');
+    assert.equal(resolutions[0]['image.png'], 'theirs');
+    await click(document.querySelector('[title="a.astro"]'));
+    const restored = EditorView.findFromDOM(
+      document.querySelector('.merge-result-editor .cm-editor'),
+    );
+    assert.match(restored.state.doc.toString(), /Override/);
     await show('Merging…');
+    const beforeBusy = restored.state.doc.toString();
+    await act(async () => restored.dispatch({ changes: { from: 0, insert: 'Blocked' } }));
+    assert.equal(restored.state.doc.toString(), beforeBusy);
+    await click(document.querySelector('[title="image.png"]'));
     assert.ok(
       [...document.querySelectorAll('.conflict-whole button')].every((entry) => entry.disabled),
     );

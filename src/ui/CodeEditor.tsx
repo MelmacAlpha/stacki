@@ -434,8 +434,8 @@ function codeEditorRangeWithin(
   return range;
 }
 
-function codeEditorLanguage(language: string | undefined): LanguageSupport {
-  if (language === 'astro') {
+export function codeEditorLanguage(language: string | undefined): LanguageSupport {
+  if (language === 'astro' || language === 'html') {
     // HTML supplies structural editing while the official Astro TextMate
     // grammar supplies the colors, including embedded expressions and scripts.
     return html();

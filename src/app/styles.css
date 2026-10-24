@@ -458,9 +458,19 @@ html[data-platform='win32'] .titlebar {
 /* A question, asked in the app's own window rather than the browser's.
    Narrow, because a confirm that needs a wide window is a confirm asking too
    much at once. */
-.confirm-dialog {
-  width: 380px;
+.modal.confirm-dialog {
+  width: 400px;
   max-width: 90vw;
+}
+.confirm-dialog .modal-header {
+  padding: 20px 20px 16px;
+  overflow-wrap: anywhere;
+}
+.confirm-dialog .modal-body {
+  padding: 0 20px 20px;
+}
+.confirm-dialog .modal-footer {
+  padding: 12px 20px 16px;
 }
 .confirm-body {
   font-size: 12px;
@@ -472,20 +482,27 @@ html[data-platform='win32'] .titlebar {
   color: var(--text);
   font-weight: 600;
 }
-/* A decision that belongs with the question rather than after it. */
-.confirm-check {
+/* Match the modal label specificity so its block layout cannot collapse the
+   checkbox gap or separate the hint from its label. */
+.confirm-body label.confirm-check {
   display: flex;
   align-items: flex-start;
-  gap: 8px;
-  margin-top: 12px;
-  padding-top: 12px;
-  border-top: 1px solid var(--border);
+  gap: 10px;
+  margin: 0;
   cursor: pointer;
   color: var(--text);
+  font-size: 12px;
+  font-weight: 400;
 }
-.confirm-check input {
-  margin: 1px 0 0;
+.confirm-check input[type='checkbox'] {
+  width: 14px;
+  height: 14px;
+  margin: 2px 0 0;
   flex-shrink: 0;
+}
+.confirm-check > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 .confirm-check-hint {
   display: block;
@@ -505,42 +522,83 @@ html[data-platform='win32'] .titlebar {
   filter: brightness(1.08);
 }
 
-/* A merge that touched twenty files is not twenty things to read at once:
-   the files down the side, one of them open at a time. */
-.conflict-modal {
-  width: 880px;
+/* The result is the main workspace; the file list never takes half the dialog. */
+.modal.conflict-modal {
+  width: min(1180px, 94vw);
   max-width: 94vw;
+  height: min(820px, 88vh);
+  max-height: 88vh;
   display: flex;
   flex-direction: column;
 }
-.conflict-intro {
-  padding: 0 16px 10px;
+.merge-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 20px 24px;
+}
+.merge-heading h2 {
+  margin: 0 0 6px;
+  font-size: 16px;
+}
+.merge-heading p {
+  margin: 0;
+  color: var(--text-dim);
+  font-size: 12px;
+}
+.merge-direction,
+.merge-legend {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.merge-direction {
+  max-width: 40%;
+  font-size: 12px;
+}
+.merge-direction span,
+.merge-legend span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.merge-branch-ours {
+  color: var(--merge-ours);
+}
+.merge-branch-theirs {
+  color: var(--merge-theirs);
+}
+.merge-manual-label {
+  color: #e5b86a;
 }
 .conflict-split {
   display: grid;
-  grid-template-columns: 220px 1fr;
+  grid-template-columns: 200px minmax(0, 1fr);
+  border-top: 1px solid var(--border);
   min-height: 0;
   flex: 1;
 }
 .conflict-files {
   border-right: 1px solid var(--border);
-  border-top: 1px solid var(--border);
   overflow-y: auto;
-  max-height: 460px;
-  padding: 6px;
+  padding: 12px 8px;
+}
+.merge-files-heading {
+  padding: 0 8px 12px;
+  color: var(--text-dim);
+  font-size: 11px;
 }
 .conflict-file-row {
   display: grid;
-  grid-template-columns: 1fr auto;
-  grid-template-areas: 'name badge' 'dir badge';
-  gap: 0 8px;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 4px;
   width: 100%;
   text-align: left;
-  padding: 6px 8px;
+  padding: 10px;
   border: none;
   border-radius: 6px;
   background: none;
-  cursor: pointer;
 }
 .conflict-file-row:hover {
   background: var(--bg-hover);
@@ -549,166 +607,251 @@ html[data-platform='win32'] .titlebar {
   background: var(--accent-soft);
 }
 .conflict-file-name {
-  grid-area: name;
-  font-size: 11.5px;
+  font-size: 12px;
   color: var(--text);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 .conflict-file-dir {
-  grid-area: dir;
   font-size: 10px;
   color: var(--text-faint);
+}
+.conflict-file-name,
+.conflict-file-dir {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  direction: rtl;
-  text-align: left;
 }
-/* "sorted" is the common state and stays quiet; anything still wanting a
-   decision is the only thing on this list worth the eye. */
 .conflict-file-badge {
-  grid-area: badge;
-  align-self: center;
-  font-size: 9.5px;
-  padding: 1px 6px;
-  border-radius: 999px;
-  color: var(--text-faint);
-  background: var(--surface-2, rgba(255, 255, 255, 0.06));
-  white-space: nowrap;
+  justify-self: start;
+  font-size: 10px;
+  color: var(--text-dim);
 }
 .conflict-file-badge.warn {
-  color: #fff;
-  background: var(--accent);
+  color: #e5b86a;
 }
-
 .conflict-detail {
-  overflow-y: auto;
-  max-height: 460px;
-  padding: 10px 14px;
-  border-top: 1px solid var(--border);
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
-.conflict-detail-head {
+.merge-result-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 12px 20px;
+  border-bottom: 1px solid var(--border);
+  font-size: 11px;
+}
+.merge-result-toolbar > div:first-child {
+  min-width: 0;
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+.merge-result-toolbar strong {
+  white-space: nowrap;
+}
+.merge-result-toolbar > div > span {
+  color: var(--text-dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.merge-result-toolbar .merge-branch-ours {
+  color: var(--merge-ours);
+}
+.merge-result-toolbar .merge-branch-theirs {
+  color: var(--merge-theirs);
+}
+.merge-result-toolbar .merge-manual-label {
+  color: #e5b86a;
+}
+.merge-result-editor {
+  flex: 1;
+  min-height: 120px;
+  overflow: hidden;
+  background: var(--bg);
+}
+.merge-result-editor .cm-editor {
+  height: 100%;
+}
+.merge-result-editor .cm-scroller {
+  overflow: auto;
+}
+.merge-result-editor .cm-line {
+  white-space: pre;
+}
+.merge-code-ours {
+  background: color-mix(in srgb, var(--merge-ours) 20%, transparent);
+  border-bottom: 1px solid var(--merge-ours);
+}
+.merge-code-theirs {
+  background: color-mix(in srgb, var(--merge-theirs) 20%, transparent);
+  border-bottom: 1px solid var(--merge-theirs);
+}
+.merge-code-custom {
+  background: rgb(229 184 106 / 18%);
+  border-bottom: 1px solid #e5b86a;
+}
+.merge-code-active {
+  outline: 1px solid var(--border-strong);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+.merge-change-inspector {
+  flex-shrink: 0;
+  border-top: 1px solid var(--border);
+  padding: 12px 20px 16px;
+  max-height: 35%;
+  overflow: auto;
+}
+.merge-change-toolbar {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding-bottom: 8px;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
 }
-.conflict-detail-path {
-  flex: 1;
-  font-size: 11px;
-  font-family: var(--mono, ui-monospace, monospace);
-  color: var(--text-faint);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  direction: rtl;
-  text-align: left;
-}
-/* A line either side, so a difference can be placed in the file without the
-   whole file being on screen. */
-.conflict-ctx {
-  font-family: var(--mono, ui-monospace, monospace);
-  font-size: 10.5px;
-  color: var(--text-faint);
-  opacity: 0.6;
-  padding: 1px 8px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.conflict-whole {
-  padding: 10px 4px;
-  font-size: 11.5px;
-  color: var(--text-faint);
-}
-
-/* Two or three buttons rather than a toggle: which side is chosen has to be
-   readable at a glance down a column of differences, and a switch only shows
-   its state by position. */
-.conflict-choice {
-  display: flex;
-  gap: 2px;
-  flex-shrink: 0;
-}
-.conflict-choice button {
-  font-size: 11px;
-  padding: 3px 9px;
-  border-radius: 5px;
-  background: none;
-  border: 1px solid var(--border);
-  color: var(--text-faint);
-  white-space: nowrap;
-}
-.conflict-choice button.on {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: #fff;
-}
-
-/* One difference. */
-.conflict-hunk {
-  margin-top: 10px;
-  border-top: 1px solid var(--border);
-  padding-top: 10px;
-}
-.conflict-hunk-head {
+.merge-change-navigation {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-bottom: 6px;
+  font-size: 11px;
 }
-.conflict-hunk-n {
+.merge-change-navigation button {
+  padding: 4px 8px;
+}
+.merge-change-status {
+  font-size: 11px;
+  color: var(--text-dim);
+}
+.merge-change-options {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+}
+.merge-source-option {
   flex: 1;
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 0.03em;
-  text-transform: uppercase;
-  color: var(--text-faint);
-}
-
-/* Both versions side by side. The kept one is lit; the other stays legible
-   rather than hidden, so the choice can be checked without changing it. */
-.conflict-sides {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 6px;
-}
-.conflict-side {
+  min-width: 0;
   border: 1px solid var(--border);
   border-radius: 6px;
   overflow: hidden;
-  opacity: 0.5;
-  transition:
-    opacity 0.12s ease,
-    border-color 0.12s ease;
 }
-.conflict-side.kept {
-  opacity: 1;
-  border-color: var(--accent);
+.merge-source-option > button {
+  width: 100%;
+  text-align: left;
+  border-radius: 0;
 }
-.conflict-side-label {
-  padding: 3px 7px;
-  font-size: 10px;
-  font-weight: 600;
-  color: var(--text-faint);
-  border-bottom: 1px solid var(--border);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.conflict-side.kept .conflict-side-label {
-  color: var(--accent);
-}
-.conflict-side .code-block {
-  background: var(--bg);
-}
-.conflict-empty {
-  padding: 8px;
+.merge-choice {
+  background: transparent;
+  color: var(--text-dim);
   font-size: 11px;
-  color: var(--text-faint);
-  font-style: italic;
+  padding: 7px 10px;
+}
+.merge-choice.on {
+  background: var(--accent-soft);
+  color: var(--text);
+}
+.merge-source-ours .merge-choice {
+  color: var(--merge-ours);
+}
+.merge-source-theirs .merge-choice {
+  color: var(--merge-theirs);
+}
+.merge-source-ours .merge-choice.on {
+  background: color-mix(in srgb, var(--merge-ours) 14%, transparent);
+}
+.merge-source-theirs .merge-choice.on {
+  background: color-mix(in srgb, var(--merge-theirs) 14%, transparent);
+}
+.merge-source-preview {
+  border-top: 1px solid var(--border);
+}
+.merge-source-preview .cm-line {
+  white-space: pre;
+  overflow-wrap: normal;
+  word-break: normal;
+}
+.merge-source-preview > span {
+  display: block;
+  padding: 10px;
+}
+.merge-footer {
+  flex-shrink: 0;
+  align-items: center;
+  padding: 14px 24px;
+}
+.merge-status {
+  flex: 1;
+  color: var(--text-dim);
+  font-size: 12px;
+}
+.conflict-whole {
+  padding: 24px;
+  gap: 16px;
+}
+.conflict-choice {
+  display: flex;
+  gap: 8px;
+}
+.conflict-choice button.on {
+  background: var(--accent);
+  color: white;
+}
+@media (max-width: 800px) {
+  .conflict-split {
+    grid-template-columns: 150px minmax(0, 1fr);
+  }
+  .merge-heading {
+    align-items: flex-start;
+    padding: 16px;
+    gap: 12px;
+  }
+  .merge-direction {
+    max-width: 35%;
+  }
+  .merge-result-toolbar,
+  .merge-change-inspector {
+    padding: 10px 12px;
+  }
+  .merge-change-options {
+    flex-wrap: wrap;
+  }
+  .merge-source-option {
+    flex-basis: 40%;
+  }
+}
+@media (max-width: 560px) {
+  .conflict-split {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+  .conflict-files {
+    display: flex;
+    gap: 6px;
+    padding: 6px;
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+    max-height: 90px;
+  }
+  .merge-files-heading {
+    display: none;
+  }
+  .conflict-file-row {
+    min-width: 140px;
+  }
+  .merge-heading {
+    flex-direction: column;
+  }
+  .merge-direction {
+    max-width: 100%;
+  }
+  .merge-change-toolbar {
+    flex-wrap: wrap;
+  }
 }
 
 /* Code shown rather than edited — the editor's own type and colours, with
@@ -724,9 +867,6 @@ html[data-platform='win32'] .titlebar {
 }
 .code-block .cm-line {
   padding: 0;
-}
-.conflict-hunk.combined .conflict-hunk-n {
-  color: var(--green);
 }
 
 /* An old version, covering the canvas. Laid out as a column so the banner is
@@ -7277,6 +7417,20 @@ body > .embed-editor_provenance {
 }
 .history-ref.current {
   color: var(--accent);
+}
+.history-ref-branch {
+  background: color-mix(in srgb, currentColor 12%, transparent);
+}
+.git-commit-destination,
+.git-commit-destination > span {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.git-commit-destination > span {
+  overflow-wrap: anywhere;
+  min-width: 0;
 }
 .history-commit-main {
   display: flex;

@@ -112,7 +112,7 @@ function ConfirmSurface({ ask, checked, setChecked, answer, confirmRef, cancelRe
           <div className="modal-header">{ask.title}</div>
           {(ask.body || ask.checkbox) && (
             <div className="modal-body confirm-body">
-              {ask.body}
+              {ask.body && <div>{ask.body}</div>}
               {ask.checkbox && (
                 <label className="confirm-check">
                   <input

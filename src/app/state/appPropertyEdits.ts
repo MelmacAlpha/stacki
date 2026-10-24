@@ -665,6 +665,10 @@ export function useContentEdits(
         return;
       }
       const next = withChildren(node, inlineWithIds(kids, 0));
+      // Content was explicitly edited. The printer's layout-preservation comparison
+      // ignores whitespace, so keeping the old inner source could restore a deleted
+      // space on save and send a different value back to the focused field.
+      Reflect.deleteProperty(next, 'source');
       commitEdit(nodeGesture(nodeId, next, { coalesceKey: `content:${nodeId}`, urgency: false }));
     },
     [commitEdit, pageStateRef],

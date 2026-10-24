@@ -503,6 +503,8 @@ function ConflictModal(props: ModalProps & { readonly conflict: PendingConflict 
   return (
     <MergeConflictModal
       conflict={props.conflict}
+      branches={props.info.branches}
+      trunk={props.info.trunk ?? 'main'}
       busy={props.busy}
       onCancel={() => props.setConflict(undefined)}
       onResolve={(choices) => {

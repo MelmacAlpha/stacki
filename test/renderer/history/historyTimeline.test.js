@@ -222,6 +222,22 @@ test('graph inspection, filters, paging and stale responses', async () => {
     await act(async () => [...polls.values()][0]());
     await reply(5, [], true);
     assert.match(document.querySelector('.history-empty').textContent, /Nothing saved yet/);
+
+    await render({ ...props, branch: 'new-design-test', head: 'feature-tip' });
+    await reply(
+      6,
+      [
+        commit('feature-tip', ['main-tip'], ['HEAD -> new-design-test']),
+        commit('main-tip', [], ['main']),
+      ],
+      true,
+    );
+    const nodes = [...document.querySelectorAll('.history-graph-node')];
+    assert.ok(nodes[0].classList.contains('history-graph-color-1'));
+    assert.ok(nodes[1].classList.contains('history-graph-color-0'));
+    assert.equal(document.querySelector('.history-ref-branch-1').textContent, 'new-design-test');
+    assert.equal(document.querySelector('.history-ref-branch-0').textContent, 'main');
+    assert.ok(document.querySelector('.history-graph-extension .history-graph-color-1'));
   } finally {
     await act(async () => root.unmount());
     assert.equal(polls.size, 0);

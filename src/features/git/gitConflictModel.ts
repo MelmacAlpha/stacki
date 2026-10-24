@@ -3,6 +3,7 @@ import type {
   WireConflictPart,
   WireMergeOutcome,
 } from '../../../shared/ipc/ipcResults';
+import type { MergeResolution } from '../../../shared/ipc/mergeResolution';
 import { assert } from '../../../shared/core/assert';
 import { BOUNDARY_LIMITS } from '../../../shared/core/boundary';
 
@@ -10,9 +11,7 @@ export type Conflict = Extract<WireMergeOutcome, { readonly conflicted: true }>;
 export type Clash = Extract<WireConflictPart, { readonly kind: 'clash' }>;
 export type ConflictChoice = 'ours' | 'theirs' | 'both' | 'merged';
 export type ConflictPicks = Readonly<Record<string, readonly ConflictChoice[]>>;
-export type ConflictChoices = Readonly<
-  Record<string, 'ours' | 'theirs' | readonly ConflictChoice[]>
->;
+export type ConflictChoices = Readonly<Record<string, MergeResolution>>;
 export interface ConflictHunk {
   readonly clash: Clash;
   readonly index: number;

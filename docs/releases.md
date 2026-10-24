@@ -15,6 +15,18 @@ Use an isolated checkout when other tasks are editing the working directory. Mat
 Studio, Studio release manifest, and npm starter versions. Never move an existing release tag to
 include later changes.
 
+## 0.1.77 updates
+
+- Merge review now opens in a wider, editable final-code view. Branch-colored highlights show
+  where each change came from, with independent choices for text and attributes, manual overrides,
+  and undo/redo. Automatic merging still combines compatible edits; stale reviews are rejected
+  before they can overwrite newer work.
+- Branches have distinct colors throughout the branch list, commit destination, and history graph.
+  Commit controls clearly identify the destination branch while the graph preserves real ancestry.
+- Merge confirmation has cleaner spacing and shorter copy.
+- Content fields preserve the caret when deleting spaces, so Backspace continues editing where
+  expected instead of jumping to the beginning.
+
 ## 0.1.76 updates
 
 - Astro `.map()` callbacks recognize async, function, block, typed, destructured, and referenced

@@ -13,6 +13,7 @@ import Tooltip from '../../ui/Tooltip';
 import HistoryGraphLane, { HISTORY_ROW_HEIGHT, historyGraphWidth } from './HistoryGraphLane';
 import { buildHistoryGraph, HISTORY_COMMITS_MAX } from './historyGraph';
 import type { HistoryGraphRow } from './historyGraph';
+import { gitBranchColors, gitBranchColor, gitRefColor } from '../../lib/gitBranchColors';
 
 type TimelineState =
   | {
@@ -31,6 +32,8 @@ type TimelineState =
 interface HistoryTimelineProps {
   readonly projectPath: string;
   readonly branch: string | undefined;
+  readonly trunk?: string;
+  readonly branches?: readonly string[];
   readonly head: string | undefined;
   readonly userEmail: string | undefined;
   readonly previewRef: string | undefined;
@@ -44,7 +47,19 @@ export default function HistoryTimeline(props: HistoryTimelineProps) {
   const [scope, setScope] = useState<'all' | 'current'>('all');
   const reference = scope === 'current' ? 'HEAD' : undefined;
   const timeline = useTimeline(props, reference);
-  const graph = useMemo(() => buildHistoryGraph(timeline.state.commits), [timeline.state.commits]);
+  const colors = useMemo(
+    () =>
+      gitBranchColors(
+        props.branches ?? [],
+        props.trunk ?? 'main',
+        timeline.state.commits.flatMap((commit) => commit.refs),
+      ),
+    [props.branches, props.trunk, timeline.state.commits],
+  );
+  const graph = useMemo(
+    () => buildHistoryGraph(timeline.state.commits, props.trunk ?? 'main', colors),
+    [timeline.state.commits, props.trunk, colors],
+  );
   const [expanded, setExpanded] = useState<string | undefined>(undefined);
   useEffect(() => {
     setExpanded((hash) =>
@@ -79,6 +94,7 @@ export default function HistoryTimeline(props: HistoryTimelineProps) {
           key={row.commit.hash}
           commit={row.commit}
           row={row}
+          colors={colors}
           width={graph.width}
           expanded={expanded === row.commit.hash}
           previewing={props.previewRef === row.commit.hash}
@@ -206,6 +222,7 @@ function mergeCommits(
 }
 
 interface CommitRowProps extends HistoryTimelineProps {
+  readonly colors: ReadonlyMap<string, number>;
   readonly commit: HistoryCommit;
   readonly row: HistoryGraphRow;
   readonly width: number;
@@ -232,7 +249,11 @@ function CommitRow(props: CommitRowProps) {
       >
         <span className="history-commit-main">
           <span className="history-subject-line">
-            <CommitRefs commit={commit} current={commit.hash === props.head} />
+            <CommitRefs
+              commit={commit}
+              current={commit.hash === props.head}
+              colors={props.colors}
+            />
             <Tooltip className="history-subject" text={commit.subject} />
           </span>
           <span className="history-meta">
@@ -251,9 +272,11 @@ function CommitRow(props: CommitRowProps) {
 function CommitRefs({
   commit,
   current,
+  colors,
 }: {
   readonly commit: HistoryCommit;
   readonly current: boolean;
+  readonly colors: ReadonlyMap<string, number>;
 }) {
   if (commit.refs.length === 0) {
     if (!current) {
@@ -265,12 +288,21 @@ function CommitRefs({
       {current && <span className="history-ref current">HEAD</span>}
       {commit.refs
         .filter((reference) => reference !== 'HEAD')
-        .map((reference) => (
-          <span className="history-ref" key={reference} title={reference}>
-            {reference.startsWith('tag: ') ? undefined : <BranchIcon size={10} />}
-            {reference.replace(/^HEAD -> /, '')}
-          </span>
-        ))}
+        .map((reference) => {
+          const color = gitRefColor(reference, colors);
+          return (
+            <span
+              className={`history-ref ${color === undefined ? '' : 'history-ref-branch'}
+                history-ref-branch-${color ?? 'tag'}`}
+              style={color === undefined ? undefined : { color: gitBranchColor(color) }}
+              key={reference}
+              title={reference}
+            >
+              {reference.startsWith('tag: ') ? undefined : <BranchIcon size={10} />}
+              {reference.replace(/^HEAD -> /, '')}
+            </span>
+          );
+        })}
     </span>
   );
 }

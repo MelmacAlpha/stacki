@@ -1,6 +1,7 @@
 import { GitPullControl } from './GitPullControl';
 import type { GitIncomingState } from './useGitIncoming';
 import React from 'react';
+import { gitBranchColors, gitBranchColor } from '../../lib/gitBranchColors';
 import type { WireGitInfo } from '../../../shared/ipc/ipcResults';
 import BranchCreate from './BranchCreate';
 import BranchActions from './BranchActions';
@@ -36,6 +37,7 @@ interface GitChipViewProps {
 }
 
 interface BranchesProps {
+  readonly colors: ReadonlyMap<string, number>;
   readonly info: WireGitInfo;
   readonly working: boolean;
   readonly newBranch: string;
@@ -47,6 +49,8 @@ interface BranchesProps {
 }
 
 interface CommitProps {
+  readonly branch: string;
+  readonly color: number;
   readonly error: string | undefined;
   readonly dirty: boolean;
   readonly working: boolean;
@@ -62,6 +66,7 @@ interface CommitProps {
 }
 
 function Branches({
+  colors,
   info,
   working,
   newBranch,
@@ -82,6 +87,7 @@ function Branches({
           <BranchRow
             key={branch}
             branch={branch}
+            colors={colors}
             info={info}
             working={working}
             onSwitch={onSwitch}
@@ -102,13 +108,14 @@ function Branches({
 }
 
 function BranchRow({
+  colors,
   branch,
   info,
   working,
   onSwitch,
   onMerge,
   onDelete,
-}: Pick<BranchesProps, 'info' | 'working' | 'onSwitch' | 'onMerge' | 'onDelete'> & {
+}: Pick<BranchesProps, 'info' | 'colors' | 'working' | 'onSwitch' | 'onMerge' | 'onDelete'> & {
   readonly branch: string;
 }) {
   const current = branch === info.branch;
@@ -122,9 +129,8 @@ function BranchRow({
         onClick={() => onSwitch(branch)}
       >
         <span
-          className={`history-branch-icon history-graph-color-${
-            branch === (info.trunk ?? 'main') ? 0 : 1
-          }`}
+          className="history-branch-icon"
+          style={{ color: gitBranchColor(colors.get(branch) ?? 0) }}
         >
           <BranchIcon size={14} />
         </span>
@@ -148,6 +154,8 @@ function BranchRow({
 }
 
 function CommitControls({
+  branch,
+  color,
   dirty,
   working,
   message,
@@ -170,7 +178,13 @@ function CommitControls({
   return (
     <>
       <div className="divider" />
-      <h3>Commit</h3>
+      <h3 className="git-commit-destination">
+        Commit to{' '}
+        <span className={`history-graph-color-${color}`} style={{ color: gitBranchColor(color) }}>
+          <BranchIcon size={12} />
+          {branch}
+        </span>
+      </h3>
       <div className="dropdown-row" style={{ flexDirection: 'column', gap: 6 }}>
         <input
           placeholder="Commit message"
@@ -212,6 +226,7 @@ function CommitControls({
 
 export default function GitChipView(props: GitChipViewProps) {
   const working = props.busy !== undefined;
+  const colors = gitBranchColors(props.info.branches, props.info.trunk ?? 'main');
   return (
     <div className="git-panel-controls" aria-label="Repository controls">
       {props.busy && (
@@ -229,6 +244,7 @@ export default function GitChipView(props: GitChipViewProps) {
         />
       )}
       <Branches
+        colors={colors}
         info={props.info}
         working={working}
         newBranch={props.newBranch}
@@ -239,6 +255,8 @@ export default function GitChipView(props: GitChipViewProps) {
         onCreateBranch={props.onCreateBranch}
       />
       <CommitControls
+        branch={props.info.branch}
+        color={colors.get(props.info.branch) ?? 0}
         error={props.error}
         onRefreshFiles={props.onRefreshFiles}
         dirty={props.info.dirty}

@@ -1,3 +1,4 @@
+import { parseMergeResolution } from './mergeResolution';
 import { parseAccountRequest } from './publishAccount';
 import { parseRepositoryRequest } from '../ipc/publishRepository';
 import { parseCanvasCreate, defaultsCanvasFile } from '../properties/defaultsCanvas';
@@ -217,7 +218,7 @@ export const IPC_PAYLOADS = {
   'git:push': object({ ...branch }),
   'git:pull': object({ ...branch }),
   'git:incoming': object({ ...branch }),
-  'git:resolveMerge': object({ ...branch, choices: optional(dictionary(data)) }),
+  'git:resolveMerge': object({ ...branch, choices: optional(dictionary(parseMergeResolution)) }),
   'git:restoreFile': object({ ...reference, path: pathText }),
   'git:restoreProject': object({ ...reference }),
   'git:status': object({ ...project }),

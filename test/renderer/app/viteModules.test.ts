@@ -13,8 +13,8 @@ import { createServer, type ViteDevServer } from 'vite';
 
 // Includes publishing, project metadata, defaults-canvas, and history payload parsers.
 // The graph includes the package-source and review-receipt contracts alongside account sign-in.
-// Two new shared contracts increase its explicit bound from 45 to 47 modules.
-const MODULES_MAX = 47;
+// The validated merge-result payload adds one module to the 47-module graph.
+const MODULES_MAX = 48;
 // Repository paths; the dev server serves each at `/<path>`.
 const ENTRY_MODULES: ReadonlyArray<{ readonly file: string; readonly exportName: string }> = [
   { file: 'src/lib/cleanError.ts', exportName: 'cleanError' },

@@ -135,6 +135,7 @@
     "shared/ipc/ipcPayloads.ts",
     "shared/ipc/ipcResults.ts",
     "shared/ipc/ipcWire.ts",
+    "shared/ipc/mergeResolution.ts",
     "shared/ipc/pageSave.ts",
     "shared/ipc/preferences.ts",
     "shared/ipc/preloadApi.ts",

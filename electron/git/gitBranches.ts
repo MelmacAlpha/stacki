@@ -2,6 +2,8 @@ import fs from 'fs';
 import path from 'path';
 
 import { toArray } from '../../shared/core/record';
+import type { MergeResolution, MergeTextResolution } from '../../shared/ipc/mergeResolution';
+import { parseMergeResolution, mergeConflictSnapshot } from '../../shared/ipc/mergeResolution';
 import { writeProjectText } from '../documents/documentWrites';
 import { parseConflict, renderResolved } from './conflicts';
 import type { ConflictPart } from './conflicts';
@@ -81,7 +83,8 @@ async function stage(
 /**
  * Finish a merge that clashed, with the user's choice for each file.
  *
- * `choices` is `{ [path]: 'ours' | 'theirs' }`. The merge is run again here
+ * Choices select whole files, individual changes, or exact reviewed text.
+ * The merge is run again here
  * rather than having been left open while the user decided, so the files never
  * sit on disk with conflict markers in them where the editor would try to
  * parse them as markup.
@@ -102,37 +105,38 @@ async function resolveMerge(
   },
 ): Promise<MergeOutcome> {
   const into = await currentBranch(git, projectPath);
-  try {
-    // Same style as the trial merge above, or the markers this re-parses would
-    // not be the ones the answers were given against.
-    await git(projectPath, ['-c', 'merge.conflictStyle=diff3', 'merge', '--no-edit', branch]);
-    // It went through cleanly this time: something changed underneath and
-    // there was nothing left to choose between.
+  const resolutions = Object.fromEntries(
+    Object.entries(choices ?? {}).map(([file, choice]): readonly [string, MergeResolution] => [
+      file,
+      parseMergeResolution(choice),
+    ]),
+  );
+  const edited = Object.values(resolutions).filter(
+    (choice) => typeof choice === 'object' && 'kind' in choice,
+  );
+  const clean = await resolveMergeStart(git, { projectPath, branch, into, edited });
+  if (clean) {
+    if (edited.length > 0) {
+      await git(projectPath, ['merge', '--abort']);
+      throw new Error('The merge changed since review. Reopen it to review the new result.');
+    }
     return { ok: true, into, changed: true, resolved: 0 };
-  } catch {
-    /* expected — it clashes again, which is what the choices are for */
   }
   const left = (await git(projectPath, ['diff', '--name-only', '--diff-filter=U'])).stdout
     .split('\n')
     .map((line) => line.trim())
     .filter(Boolean);
   try {
+    if (
+      edited.length > 0 &&
+      (left.length !== Object.keys(resolutions).length ||
+        left.some((file) => resolutions[file] === undefined))
+    ) {
+      throw new Error('The conflicted files changed. Reopen the merge to review them again.');
+    }
     for (const file of left) {
-      const choice = choices?.[file];
-      // An answer per disagreement — the file is rebuilt from git's own
-      // markers with the chosen side of each. This is what makes it possible
-      // to take part of a file from each branch.
-      const perHunk = toArray(choice);
-      if (perHunk) {
-        const parts = parseConflict(fs.readFileSync(path.join(projectPath, file), 'utf8'));
-        writeProjectText(path.join(projectPath, file), renderResolved(parts, perHunk));
-      } else {
-        // One answer for the whole file. Defaults to keeping what is on this
-        // branch: a missing choice must never silently prefer the incoming
-        // version over the user's own work.
-        const side = choice === 'theirs' ? '--theirs' : '--ours';
-        await git(projectPath, ['checkout', side, '--', file]);
-      }
+      const choice = resolutions[file] ?? 'ours';
+      await resolveMergeFile(git, projectPath, file, choice);
       await git(projectPath, ['add', '--', file]);
     }
     // Everything git reconciled by itself is already staged; this commits the
@@ -149,6 +153,73 @@ async function resolveMerge(
     throw new Error(gitErrorDetail(error).trim() || `Could not finish merging "${branch}".`);
   }
   return { ok: true, into, changed: true, resolved: left.length };
+}
+
+async function resolveMergeStart(
+  git: Git,
+  {
+    projectPath,
+    branch,
+    into,
+    edited,
+  }: {
+    readonly projectPath: string;
+    readonly branch: string;
+    readonly into: string | undefined;
+    readonly edited: readonly MergeTextResolution[];
+  },
+): Promise<boolean> {
+  for (const choice of edited) {
+    if (into !== choice.expectedBranch) {
+      throw new Error('The current branch changed. Reopen the merge to review it again.');
+    }
+  }
+  let clean = false;
+  try {
+    const prepare = edited.length > 0 ? ['--no-commit', '--no-ff'] : [];
+    await git(projectPath, [
+      '-c',
+      'merge.conflictStyle=diff3',
+      'merge',
+      '--no-edit',
+      ...prepare,
+      branch,
+    ]);
+    clean = true;
+  } catch {
+    /* Expected: the merge conflicts again and must be resolved below. */
+  }
+  return clean;
+}
+
+// Keep file reconstruction separate from merge orchestration so every write
+// follows validation, and an error always unwinds the prepared merge above.
+async function resolveMergeFile(
+  git: Git,
+  projectPath: string,
+  file: string,
+  choice: MergeResolution,
+): Promise<void> {
+  // An answer per disagreement — the file is rebuilt from git's own
+  // markers with the chosen side of each. This is what makes it possible
+  // to take part of a file from each branch.
+  const perHunk = toArray(choice);
+  if (typeof choice === 'object' && 'kind' in choice) {
+    const parts = parseConflict(fs.readFileSync(path.join(projectPath, file), 'utf8'));
+    if (mergeConflictSnapshot(parts) !== choice.expected) {
+      throw new Error('The file changed since review. Reopen the merge to review it again.');
+    }
+    writeProjectText(path.join(projectPath, file), choice.text);
+  } else if (perHunk) {
+    const parts = parseConflict(fs.readFileSync(path.join(projectPath, file), 'utf8'));
+    writeProjectText(path.join(projectPath, file), renderResolved(parts, perHunk));
+  } else {
+    // One answer for the whole file. Defaults to keeping what is on this
+    // branch: a missing choice must never silently prefer the incoming
+    // version over the user's own work.
+    const side = choice === 'theirs' ? '--theirs' : '--ours';
+    await git(projectPath, ['checkout', side, '--', file]);
+  }
 }
 
 /**

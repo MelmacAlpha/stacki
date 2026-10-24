@@ -68,14 +68,13 @@ export async function mergeBranchAction({
   const isTrunk = !!trunk && branch === trunk;
   const answer = await confirmDialog({
     title: `Merge “${branch}” into “${into}”?`,
-    body: `Everything on ${branch} becomes part of ${into}.`,
     confirmLabel: `Merge into ${into}`,
     ...(isTrunk
       ? {}
       : {
           checkbox: {
             label: `Delete “${branch}” afterwards`,
-            hint: 'Its work will be on ' + into + ', so the branch has nothing left of its own.',
+            hint: `Merged changes stay in ${into}.`,
             defaultChecked: true,
           },
         }),
