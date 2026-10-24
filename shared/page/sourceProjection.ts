@@ -56,6 +56,8 @@ export interface ProjectedNode {
   readonly capability: Capability;
   readonly syntax: NodeSyntax;
   readonly list: NodeList;
+  /** Callback roots occupy separate JavaScript expressions, not a sibling list. */
+  readonly callback?: true;
 }
 
 export interface Diagnostic {
@@ -416,6 +418,9 @@ function projectNode(entry: PendingNode, convert: SpanConverter): ProjectedNode 
     capability,
     syntax: entry.syntax,
     list: entry.list,
+    ...(entry.node.kind === 'map' && entry.node.bodyParts !== undefined
+      ? { callback: true as const }
+      : {}),
   };
 }
 

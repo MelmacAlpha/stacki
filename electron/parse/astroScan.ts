@@ -116,7 +116,8 @@ function endsInComment(text: string): boolean {
     if (skipped !== i) {
       // A string ends a statement as well as any other word does; only a
       // comment swallows what is written after it.
-      inside = text.charAt(i) === '/' && !text.slice(skipped).trim();
+      const comment = text.startsWith('//', i) || text.startsWith('/*', i);
+      inside = comment && !text.slice(skipped).trim();
       i = skipped - 1;
     } else if (text.charAt(i).trim()) {
       inside = false;
@@ -170,6 +171,9 @@ export function splitBlockLoopBody(
         return undefined;
       }
       let markup = text.slice('return'.length);
+      if (/^[ \t]*(?:\r|\n)/.test(markup)) {
+        return undefined; // Automatic semicolon insertion makes this an empty return.
+      }
       let markupAt = rawAt + at + (after.length - after.trimStart().length) + 'return'.length;
       const trimLeft = () => {
         const space = markup.length - markup.trimStart().length;

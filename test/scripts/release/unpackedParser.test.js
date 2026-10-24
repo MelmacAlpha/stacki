@@ -50,9 +50,14 @@ const ENTRIES = [
   'dist/electron/previewServer/previewWarmup.js',
 ];
 
+// The parser uses TypeScript's syntax tree for arbitrary callback bodies. Its
+// existing runtime dependency must also be available to plain Node outside ASAR.
+const PARSER_PACKAGES = ['node_modules/typescript/package.json',
+  'node_modules/typescript/lib/typescript.js'];
+
 // Every local file the entry pulls in, transitively. Only relative requires:
-// a bare specifier is a package, which asar handles for the app itself and
-// which this parser deliberately has none of.
+// bare package dependencies are listed above and copied beside this closure,
+// because the project's Node process cannot use Electron's ASAR loader.
 // A require chain in the built app runs a dozen modules deep; one past this is
 // a resolution loop the `seen` set failed to stop.
 const CLOSURE_LIMITS = { requireDepthMax: 64 };
@@ -106,7 +111,8 @@ const covers = (pattern, rel) => {
 
 const pkg = JSON.parse(fs.readFileSync(repoPath('package.json'), 'utf8'));
 const patterns = pkg.build?.asarUnpack || [];
-const files = [...ENTRIES.reduce((seen, entry) => closureOf(entry, seen), new Set())];
+const files = [...ENTRIES.reduce((seen, entry) => closureOf(entry, seen), new Set()),
+  ...PARSER_PACKAGES];
 // Main finds the preview's files through runtimePaths; the parser, through
 // the generated configuration main writes.
 const main = [

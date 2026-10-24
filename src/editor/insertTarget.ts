@@ -83,7 +83,9 @@ export function acceptsChildren(
   // A condition holds nothing itself — insertTargetFor resolves it to the
   // branch its row displays.
   if (node.kind === 'map' || node.kind === 'chunk-group' || node.kind === 'branch') {
-    return true;
+    // Arbitrary callback roots are separate return sites. Insert within their
+    // actual elements; inserting into the callback would choose a branch for the user.
+    return node.bodyParts === undefined;
   }
   if (node.kind === 'component') {
     const component = (insertables || []).find((candidate) => candidate.name === node.name);

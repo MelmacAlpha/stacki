@@ -1,11 +1,14 @@
 import { useId, useRef, useState } from 'react';
+import type { ReactNode } from 'react';
 import { ChevronDownIcon } from '../../ui/Icons';
 import Popup from '../../ui/Popup';
 
 interface WelcomeSplitButtonProps {
   readonly className: string;
   readonly label: string;
+  readonly icon?: ReactNode;
   readonly menuLabel: string;
+  readonly menuIcon?: ReactNode;
   readonly menuTitle: string;
   readonly onClick: () => void;
   readonly onMenuSelect: () => void;
@@ -17,6 +20,7 @@ export default function WelcomeSplitButton(props: WelcomeSplitButtonProps) {
   return (
     <div className="welcome-split-button" ref={groupRef}>
       <button className={props.className} onClick={props.onClick}>
+        {props.icon}
         {props.label}
       </button>
       <button
@@ -46,14 +50,19 @@ export default function WelcomeSplitButton(props: WelcomeSplitButtonProps) {
         role="menu"
         id={menuId}
       >
-        <SplitMenuItem
-          itemRef={itemRef}
-          label={props.menuLabel}
-          onSelect={() => {
-            setOpen(false);
-            props.onMenuSelect();
-          }}
-        />
+        {({ finish }) => (
+          <SplitMenuItem
+            itemRef={itemRef}
+            label={props.menuLabel}
+            icon={props.menuIcon}
+            onSelect={() =>
+              finish(() => {
+                setOpen(false);
+                props.onMenuSelect();
+              })
+            }
+          />
+        )}
       </Popup>
     </div>
   );
@@ -61,15 +70,18 @@ export default function WelcomeSplitButton(props: WelcomeSplitButtonProps) {
 
 function SplitMenuItem({
   label,
+  icon,
   itemRef,
   onSelect,
 }: {
   readonly label: string;
+  readonly icon: ReactNode;
   readonly itemRef: React.RefObject<HTMLButtonElement>;
   readonly onSelect: () => void;
 }) {
   return (
     <button autoFocus ref={itemRef} role="menuitem" onClick={onSelect}>
+      {icon}
       {label}
     </button>
   );

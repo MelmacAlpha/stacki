@@ -1,8 +1,8 @@
 {
   "name": "stacki",
   "productName": "Stacki",
-  "version": "0.1.75",
-  "description": "Stacki — a visual Astro builder with live preview and publishing.",
+  "version": "0.1.76",
+  "description": "Stacki \u2014 a visual Astro builder with live preview and publishing.",
   "homepage": "https://github.com/flowtricks/stacki",
   "main": "dist/electron/main.js",
   "imports": {
@@ -143,6 +143,7 @@
       "dist/electron/parse/**",
       "dist/electron/previewServer/**",
       "dist/shared/**",
+      "node_modules/typescript/**",
       "**/node_modules/node-pty/**",
       "**/node_modules/@img/sharp-wasm32/**"
     ],

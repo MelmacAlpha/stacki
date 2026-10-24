@@ -40,6 +40,7 @@ type NodeFields =
       children: ParserNode[];
       headSource?: string;
       body?: readonly string[];
+      bodyParts?: readonly string[];
       bare?: boolean;
     }
   | { kind: 'cond'; op: '?' | '&&'; test: string; children: ParserNode[] }

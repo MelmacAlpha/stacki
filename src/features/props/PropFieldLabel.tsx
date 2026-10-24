@@ -1,12 +1,12 @@
 // A prop field's label row: its pill, its menu, the picker it opens, and the
 // reset menu (PropField.tsx).
 
-import React, { useEffect, useRef } from 'react';
+import React from 'react';
+import { ResetMenu } from '../../ui/ResetLabel';
 import { partsFromValue, valueFromParts } from '../../editor/bindings';
 import { BindHandle, FieldDataPicker } from './propBindings';
 import PropTip from './PropTip';
 import {
-  ResetIcon,
   FieldNumberIcon,
   ComponentPropertiesIcon,
   FieldSwitchIcon,
@@ -14,9 +14,8 @@ import {
   CodeIcon,
   ElementSlotIcon,
   VariableTextSizeIcon,
-  CornerIcon,
 } from '../../ui/Icons';
-import { type ResetMenuProps, controlWord, type PropState } from './propFieldModel';
+import { controlWord, type PropState } from './propFieldModel';
 
 export const noLabelActivation = (event: React.MouseEvent<HTMLLabelElement>) =>
   event.preventDefault();
@@ -171,60 +170,5 @@ export function PropFieldPicker({ state }: { readonly state: PropState }) {
         onClose={() => setInsertAt(undefined)}
       />
     )
-  );
-}
-
-export function ResetMenu({ position, onReset, onUnbind, unbindLabel, onClose }: ResetMenuProps) {
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const onDown = (event: MouseEvent) => {
-      if (
-        ref.current &&
-        !(event.target instanceof window.Node && ref.current.contains(event.target))
-      ) {
-        onClose();
-      }
-    };
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        onClose();
-      }
-    };
-    const onScroll = (event: Event) => {
-      if (
-        ref.current &&
-        event.target instanceof window.Node &&
-        ref.current.contains(event.target)
-      ) {
-        return;
-      }
-      onClose();
-    };
-    document.addEventListener('mousedown', onDown);
-    document.addEventListener('keydown', onKey);
-    window.addEventListener('scroll', onScroll, true);
-    window.addEventListener('resize', onClose);
-    return () => {
-      document.removeEventListener('mousedown', onDown);
-      document.removeEventListener('keydown', onKey);
-      window.removeEventListener('scroll', onScroll, true);
-      window.removeEventListener('resize', onClose);
-    };
-  }, [onClose]);
-
-  return (
-    <div ref={ref} className="prop-menu" style={{ left: position.left, top: position.top }}>
-      {onUnbind && (
-        <div className="prop-menu-item" onClick={onUnbind}>
-          <CornerIcon size={12} />
-          {unbindLabel}
-        </div>
-      )}
-      <div className="prop-menu-item" onClick={onReset}>
-        <ResetIcon size={12} />
-        Reset to default property value
-      </div>
-    </div>
   );
 }

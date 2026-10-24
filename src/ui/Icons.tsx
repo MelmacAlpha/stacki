@@ -34,6 +34,36 @@ export const GitHubIcon = (props: IconProps) => (
   </I24>
 );
 
+// Brand marks inherit the label colour to stay legible on both white and dark buttons.
+export const LumosIcon = ({ size = 16, className, style }: IconProps) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 123 120"
+    fill="currentColor"
+    className={className}
+    style={{ display: 'block', flexShrink: 0, ...style, pointerEvents: 'none' }}
+    aria-hidden="true"
+  >
+    <path d={paths.lumosIconPath} />
+  </svg>
+);
+
+export const AstroIcon = ({ size = 16, className, style }: IconProps) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 370 467"
+    fill="currentColor"
+    className={className}
+    style={{ display: 'block', flexShrink: 0, ...style, pointerEvents: 'none' }}
+    aria-hidden="true"
+  >
+    <path d={paths.astroIconFlamePath} />
+    <path d={paths.astroIconLetterPath} />
+  </svg>
+);
+
 export const FileIcon = (props: IconProps) => (
   <I {...props}>
     <path d={fileIconPath1} />

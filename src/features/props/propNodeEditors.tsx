@@ -128,20 +128,22 @@ const NO_SOURCE = '[]';
 const DEFAULT_ITEM = 'item'; // a value no expression can collide with
 
 function useMapModel({ node, onSetText }: MapEditorProps) {
-  const parsed = parseMapHead(node.head);
+  // General callbacks can declare and shadow names between markup roots.
+  // Their header stays a code field until rename analysis covers those scopes.
+  const parsed = node.bodyParts === undefined ? parseMapHead(node.head) : undefined;
   const [fields, setFields] = useState(parsed || { data: '', item: '', index: '' });
   const lastBuiltRef = useRef(node.head);
 
   // External changes (undo, file reload, code edits below) re-sync fields.
   useEffect(() => {
     if (node.head !== lastBuiltRef.current) {
-      const parsed = parseMapHead(node.head);
+      const parsed = node.bodyParts === undefined ? parseMapHead(node.head) : undefined;
       if (parsed) {
         setFields(parsed);
       }
       lastBuiltRef.current = node.head;
     }
-  }, [node.head]);
+  }, [node.head, node.bodyParts]);
 
   // Typing only updates local state; the head is written on blur/Enter/pick
   // so half-typed values never run in the preview.
@@ -231,7 +233,7 @@ function useMapEditor(props: MapEditorProps) {
     });
   };
 
-  const parseableNow = !!parseMapHead(node.head);
+  const parseableNow = node.bodyParts === undefined && !!parseMapHead(node.head);
   const isNoSource = !fields.data.trim() || fields.data.trim() === NO_SOURCE;
   const itemBad = fields.item !== '' && !IDENT_RE.test(fields.item);
   const indexBad = fields.index !== '' && !IDENT_RE.test(fields.index);

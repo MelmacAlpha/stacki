@@ -10,7 +10,14 @@ import {
   removeRecentProject,
   type RecentProject,
 } from './welcomeBridge';
-import { CloseIcon, LayersIcon } from '../../ui/Icons';
+import {
+  AstroIcon,
+  CloseIcon,
+  FolderIcon,
+  GitHubIcon,
+  LayersIcon,
+  LumosIcon,
+} from '../../ui/Icons';
 import StackiLogo from './StackiLogo';
 import WelcomeBackground from './WelcomeBackground';
 import { NewProjectWizard, StarterWizard } from './WelcomeWizards';
@@ -223,16 +230,20 @@ function WelcomeHero({
         <div className="actions-row">
           <WelcomeSplitButton
             className={hasRecents ? 'primary' : ''}
-            label="Open Project…"
-            menuLabel="Open from GitHub…"
+            label="Open from folder"
+            icon={<FolderIcon size={15} />}
+            menuLabel="Open from GitHub"
+            menuIcon={<GitHubIcon size={15} />}
             menuTitle="More ways to open a project"
             onClick={openExisting}
             onMenuSelect={cloneRepository}
           />
           <WelcomeSplitButton
             className={hasRecents ? '' : 'primary'}
-            label="Start from Lumos…"
-            menuLabel="Empty Astro project…"
+            label="Start from Lumos"
+            icon={<LumosIcon size={15} />}
+            menuLabel="Start from Astro"
+            menuIcon={<AstroIcon size={15} />}
             menuTitle="More ways to start a project"
             onClick={startFromLumos}
             onMenuSelect={createNew}

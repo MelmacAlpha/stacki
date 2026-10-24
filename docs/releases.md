@@ -15,6 +15,25 @@ Use an isolated checkout when other tasks are editing the working directory. Mat
 Studio, Studio release manifest, and npm starter versions. Never move an existing release tag to
 include later changes.
 
+## 0.1.76 updates
+
+- Astro `.map()` callbacks recognize async, function, block, typed, destructured, and referenced
+  forms while preserving source and exposing their markup as editable elements.
+- Optional content fields use blue reset labels: Option-click to clear, or click and choose Reset.
+- Project startup shows one loading indicator while dependencies and the preview are starting.
+- [PR #54](https://github.com/flowtricks/stacki/pull/54): Project dependencies and Cloudflare's
+  Wrangler install use the site's package manager, preferring `package.json` over its lockfile.
+  Cancelling Cloudflare sign-in lets installation finish, and pnpm installs tolerate blocked
+  dependency build scripts while keeping those scripts blocked. The sign-in dialog keeps one
+  screen through installation, browser sign-in, and retry.
+- [PR #55](https://github.com/flowtricks/stacki/pull/55): Start from Astro now asks where the site
+  should go, then lets you name it and preview its folder, matching Start from Lumos. Both flows
+  share name validation and improved label spacing. Failed Astro creation removes its new folder
+  only when it is still empty, so retrying the same name works without deleting generated files.
+- The welcome screen uses folder, GitHub, Lumos, and Astro icons with concise action labels.
+  Dropdowns expand from their buttons as one white surface and animate closed before opening
+  the next dialog, with reduced-motion support.
+
 ## Learn from publishing failures
 
 Whenever a GitHub release or publishing workflow fails, inspect the failure before retrying.

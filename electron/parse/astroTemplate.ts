@@ -39,20 +39,66 @@ import {
 } from './astroParseState';
 import { isInlineRun } from './astroSerialize';
 import { scanTag } from './astroTag';
+import { readMapSyntax, type MapSyntax } from './astroMapSyntax';
 
 function tryParseMap(exprText: string, base: number | undefined = undefined): MapNode | undefined {
   const inner = exprText.slice(1, -1); // strip the outer { }
-  // Every form is tried: the concise matcher's lazy prefix can run past a
-  // block body's `=> {`, or past a bare body's `=> <`, and match a NESTED
-  // `.map((t) => (` in its markup, so its failure says nothing about whether
-  // this is a block-bodied or paren-less loop.
+  const syntax = readMapSyntax(inner);
+  if (!syntax) {
+    return undefined;
+  }
+  // The syntax tree chooses the callback form before the compact readers run.
+  // Other forms preserve their code around independently editable markup roots.
   const inBase = base === undefined ? undefined : base + 1;
-  return (
-    tryParseConditionalMap(inner, inBase) ||
-    tryParseConciseMap(inner, inBase) ||
-    tryParseBareMap(inner, inBase) ||
-    tryParseBlockMap(inner, inBase)
-  );
+  return parseMapSimple(inner, syntax, inBase) || parseMapCallback(inner, syntax, inBase);
+}
+
+function parseMapSimple(inner: string, syntax: MapSyntax, base: number | undefined) {
+  switch (syntax.form) {
+    case 'conditional':
+      return tryParseConditionalMap(inner, base);
+    case 'markup':
+      return tryParseConciseMap(inner, base) || tryParseBareMap(inner, base);
+    case 'block':
+      return syntax.markup.length === 1 ? tryParseBlockMap(inner, base) : undefined;
+    case 'general':
+      return undefined;
+    default: {
+      const exhaustive: never = syntax.form;
+      return exhaustive;
+    }
+  }
+}
+
+function parseMapCallback(
+  inner: string,
+  syntax: MapSyntax,
+  base: number | undefined,
+): MapNode | undefined {
+  const children: ParserNode[] = [];
+  const count = parseState.nodes;
+  const previousBail = parseState.lastBail;
+  for (const span of syntax.markup) {
+    const parsed = parseTemplate(
+      inner.slice(span.start, span.end),
+      base === undefined ? undefined : base + span.start,
+    );
+    if (!parsed.clean || parsed.nodes.length !== 1) {
+      parseState.nodes = count;
+      parseState.lastBail = previousBail;
+      return undefined;
+    }
+    children.push(required(parsed.nodes[0], 'A callback markup root parsed as one node'));
+  }
+  assert(syntax.parts.length === children.length + 1, 'Callback code surrounds each markup root');
+  return {
+    id: makeId(),
+    kind: 'map',
+    head: normalizeHead(syntax.head),
+    headSource: syntax.head,
+    bodyParts: syntax.parts,
+    children,
+  };
 }
 
 // A map callback can return a conditional directly, with or without parens
@@ -140,6 +186,9 @@ function tryParseConciseMap(
     return undefined;
   }
   const body = inner.slice(openIndex + 1, closeIndex);
+  if (!body.trimStart().startsWith('<')) {
+    return undefined;
+  }
   // `inner` starts one char into exprText, and body one char past the arrow '('.
   const parsed = parseTemplate(body, base === undefined ? undefined : base + openIndex + 1);
   if (!parsed.clean) {

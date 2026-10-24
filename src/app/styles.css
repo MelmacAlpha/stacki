@@ -4638,6 +4638,12 @@ body > .embed-editor_provenance {
   position: relative;
   display: flex;
 }
+.welcome .welcome-split-button > button {
+  transition:
+    background 160ms ease,
+    color 160ms ease,
+    border-radius 160ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
 .welcome .welcome-split-button > button:first-child {
   border-radius: 10px 0 0 10px;
 }
@@ -4649,17 +4655,49 @@ body > .embed-editor_provenance {
 .welcome .welcome-split-button > .welcome-split-arrow.primary {
   border-left-color: rgb(0 0 0 / 14%);
 }
-.welcome-split-menu {
+.welcome-split-arrow svg {
+  transition: transform 160ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+/* Keep both halves white through exit so the menu reads as one expanding control. */
+.welcome .welcome-split-button:has(> .welcome-split-menu) > button {
+  background: #fff;
+  color: #111;
+}
+.welcome .welcome-split-button:has(> .welcome-split-menu) > button:hover {
+  background: #f0f0f0;
+}
+.welcome .welcome-split-button:has(> .welcome-split-menu) > .welcome-split-arrow {
+  border-left-color: rgb(0 0 0 / 14%);
+}
+.welcome .welcome-split-button:has(> [data-popup-phase='open']) > button {
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+}
+.welcome-split-button:has(> [data-popup-phase='open']) > .welcome-split-arrow svg {
+  transform: rotate(180deg);
+}
+.welcome-split-menu.popup-surface {
   position: absolute;
-  top: calc(100% + 6px);
+  top: calc(100% - 1px);
   left: 0;
   z-index: 10;
-  min-width: 100%;
+  width: 100%;
   padding: 5px;
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  background: var(--bg-panel-2);
-  box-shadow: 0 8px 24px rgb(0 0 0 / 30%);
+  border-top: 1px solid rgb(0 0 0 / 10%);
+  border-radius: 0 0 10px 10px;
+  background: #fff;
+  color: #111;
+  clip-path: inset(0 0 0 0);
+  transition: clip-path var(--popup-duration) cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+/* Reveal from the shared edge instead of fading a detached floating panel. */
+.welcome-split-menu.popup-surface[data-popup-phase] {
+  opacity: 1;
+  transform: none;
+}
+.welcome-split-menu.popup-surface[data-popup-phase='opening'],
+.welcome-split-menu.popup-surface[data-popup-phase='closing'] {
+  clip-path: inset(0 0 100% 0);
 }
 .welcome .welcome-split-menu > button {
   width: 100%;
@@ -4668,9 +4706,35 @@ body > .embed-editor_provenance {
   padding: 9px 10px;
   white-space: nowrap;
   background: transparent;
+  color: inherit;
+  border-radius: 6px;
+  opacity: 1;
+  transform: translateY(0);
+  transition:
+    opacity var(--popup-duration) ease,
+    transform var(--popup-duration) cubic-bezier(0.2, 0.8, 0.2, 1),
+    background 100ms ease;
 }
 .welcome .welcome-split-menu > button:hover {
-  background: var(--bg-hover);
+  background: #ededed;
+}
+.welcome .welcome-split-menu > button:focus-visible {
+  outline: 2px solid #111;
+  outline-offset: -2px;
+}
+.welcome
+  .welcome-split-menu:is([data-popup-phase='opening'], [data-popup-phase='closing'])
+  > button {
+  opacity: 0;
+  transform: translateY(-5px);
+}
+@media (prefers-reduced-motion: reduce) {
+  .welcome .welcome-split-button > button,
+  .welcome-split-arrow svg,
+  .welcome-split-menu.popup-surface,
+  .welcome .welcome-split-menu > button {
+    transition: none;
+  }
 }
 
 /* Recents strip pinned to the bottom, separated by a hairline divider. Cards
@@ -6180,15 +6244,6 @@ body > .embed-editor_provenance {
   color: var(--text);
   background: rgba(255, 255, 255, 0.12);
 }
-.cms-field-head .content-clear {
-  margin-left: auto;
-  opacity: 0;
-  padding: 1px;
-}
-.cms-field:hover .cms-field-head .content-clear {
-  opacity: 1;
-}
-
 .content-add-field {
   display: flex;
   align-items: center;

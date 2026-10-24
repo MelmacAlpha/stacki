@@ -2,6 +2,7 @@
 // their wire shape once here; keep original nodes so source spelling survives.
 import { toArray, toRecord } from '../../shared/core/record';
 import { LIMITS } from '../../shared/core/limits';
+import { parseMapBodyParts } from '../../shared/page/pageNode';
 import { parseImportMember, parseImportSlots } from '../../shared/page/frontmatter';
 import type { ImportMember } from '../../shared/page/frontmatter';
 import type { ParserNode, ParserPageModel } from './astroParserTypes';
@@ -34,7 +35,7 @@ const NODE_VARIANT_FIELDS: Readonly<Record<string, readonly string[]>> = {
   'raw-line': ['value'],
   comment: ['value', 'jsx'],
   raw: ['name', 'inner'],
-  map: ['head', 'children', 'headSource', 'body', 'bare'],
+  map: ['head', 'children', 'headSource', 'body', 'bodyParts', 'bare'],
   cond: ['op', 'test', 'children'],
   branch: ['name', 'children'],
   'chunk-group': ['name', 'chunkFile', 'children'],
@@ -168,6 +169,9 @@ function parseSerializeNode(input: unknown): Record<string, unknown> {
       break;
     case 'map':
       parseText(record['head'], 'node.head');
+      if (record['bodyParts'] !== undefined) {
+        parseMapBodyParts(record['bodyParts'], record['children']);
+      }
       if (record['body'] !== undefined) {
         parseStrings(record['body'], LIMITS.treeNodesMax);
       }
@@ -218,6 +222,7 @@ function parseSerializeVariant(record: Record<string, unknown>): void {
     'head',
     'headSource',
     'body',
+    'bodyParts',
     'bare',
     'op',
     'test',

@@ -8,6 +8,7 @@ import type { Attr } from '../../shared/page/pageNode';
 import { assert } from '../../shared/core/assert';
 import { LIMITS } from '../../shared/core/limits';
 import type { ParserNode, MapNode, CondNode, ValueNode } from './astroParserTypes';
+import { serializeMapCallback } from './astroMapSerialize';
 import { attrsAsWritten, serializeAttrs, required } from './astroAttrs';
 import { normalizeHead, blockHead } from './astroScan';
 
@@ -365,6 +366,20 @@ export function serializeNodes(input: readonly unknown[]): string {
   return lines.join('\n') + '\n';
 }
 
+function serializeNodeCallback(
+  node: MapNode,
+  indent: string,
+  lines: string[],
+  depth: number,
+): void {
+  const text = serializeMapCallback(node, (child) => {
+    const rendered: string[] = [];
+    serializeNode(child, '', rendered, depth + 1);
+    return rendered.join('\n');
+  });
+  lines.push(indent + text);
+}
+
 function serializeNodeText(node: ValueNode, indent: string, lines: string[]): void {
   // Prose the author wrapped by hand comes back on the lines they wrapped
   // it on. Each line already carries its own indentation; only the first
@@ -398,6 +413,9 @@ function serializeNodeMap(node: MapNode, indent: string, lines: string[], depth:
       lines.push(line);
     }
     return;
+  }
+  if (node.bodyParts !== undefined) {
+    return serializeNodeCallback(node, indent, lines, depth);
   }
   lines.push(indent + '{');
   // A loop whose body declares things keeps the statement form: the

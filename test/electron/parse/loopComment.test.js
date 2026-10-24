@@ -241,12 +241,12 @@ const stillCode = (body, what) => {
   );
 };
 
-stillCode(
+loopIn(
   `  {items.map((item) => {
     if (!item.title) return null;
     return <li>{item.title}</li>;
   })}`,
-  'a loop that decides something stays code',
+  'a loop with early returns preserves its decisions',
 );
 stillCode(
   `  {items.map((item) => {
@@ -256,13 +256,13 @@ stillCode(
   })}`,
   'a comment nobody closed stays code',
 );
-stillCode(
+loopIn(
   `  {items.map((item) => {
     const label = item.title;
     return <li>{label}</li>;
     /* and then some. */
   })}`,
-  'anything after the return stays code',
+  'comments after the return remain in the callback',
 );
 
 // --- the corpus holds the real one -------------------------------------------

@@ -67,6 +67,8 @@ export interface MapNode {
   readonly headSource?: string;
   readonly bare?: boolean;
   readonly body?: readonly string[];
+  /** JavaScript between callback markup roots, including the closing call/braces. */
+  readonly bodyParts?: readonly string[];
   readonly source?: string;
 }
 

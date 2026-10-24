@@ -13,6 +13,7 @@ import HtmlField from '../../ui/HtmlField';
 import { containsHTML } from '../../ui/htmlFieldModel';
 import { calendarValue } from '../../ui/dateFieldModel';
 import ExprInput from '../../ui/ExprInput';
+import { ResetLabel } from '../../ui/ResetLabel';
 import { ChevronRightIcon, CloseIcon, DragIcon, PlusIcon, TrashIcon } from '../../ui/Icons';
 import useListReorder from '../../ui/useListReorder';
 import {
@@ -743,7 +744,12 @@ function FieldHeader(
   return (
     <div className="cms-field-head">
       <label>
-        {props.field.label}
+        <ResetLabel
+          label={props.field.label}
+          active={!props.field.required && props.present}
+          // Reset omits the key; the separate None control writes an explicit null.
+          onReset={() => props.onChange(undefined)}
+        />
         {props.field.required && (
           <span className="content-required" title="Required">
             {' '}
@@ -758,15 +764,6 @@ function FieldHeader(
           onClick={() => props.onChange(props.value === null ? blankFor(props.field) : NULL_DATA)}
         >
           None
-        </button>
-      )}
-      {!props.field.required && props.present && (
-        <button
-          className="ghost content-clear"
-          title="Remove this field"
-          onClick={() => props.onChange(undefined)}
-        >
-          <CloseIcon size={9} />
         </button>
       )}
       {props.synthesized && (

@@ -42,6 +42,7 @@ export function CanvasPane({ app }: { readonly app: ShellView }) {
         spacingHover={app.spacingHover}
         devUrl={app.devUrl}
         devStatus={app.devStatus}
+        coveredByBusyOverlay={!!app.busy}
         devLog={app.devLog}
         devDiag={app.devDiag}
         route={app.pageUrlPath}

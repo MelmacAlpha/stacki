@@ -55,13 +55,6 @@ export interface PropFieldProps {
   readonly dataContext?: SourceContext | undefined;
   readonly onChange: ValueChange;
 }
-export interface ResetMenuProps {
-  readonly position: FieldPosition;
-  readonly onReset: () => void;
-  readonly onUnbind?: (() => void) | undefined;
-  readonly unbindLabel: string;
-  readonly onClose: () => void;
-}
 export function attrText(value: Attr | undefined): string | undefined {
   return value?.type === 'bare' ? undefined : value?.value;
 }

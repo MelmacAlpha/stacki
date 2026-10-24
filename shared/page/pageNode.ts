@@ -31,6 +31,31 @@ export { assertTreeInvariants } from './pageTreeInvariants';
 // The shapes are declared beside this file; every caller still imports them here.
 export type * from './pageNodeTypes';
 
+// Both wire readers validate the interleaving so a malformed child list cannot
+// silently drop executable statements from a general callback.
+export function parseMapBodyParts(input: unknown, children: unknown): readonly string[] {
+  if (!Array.isArray(input)) {
+    throw new Error('Map.bodyParts: expected array');
+  }
+  if (input.length > LIMITS.treeNodesMax + 1) {
+    throw new Error('Map.bodyParts: exceeds part limit');
+  }
+  if (!Array.isArray(children) || input.length !== children.length + 1) {
+    throw new Error('Map.bodyParts: expected one more part than markup roots');
+  }
+  let length = 0;
+  return input.map((part: unknown) => {
+    if (typeof part !== 'string') {
+      throw new Error('Map.bodyParts: expected string');
+    }
+    length += part.length;
+    if (length > LIMITS.nodeValueCharsMax) {
+      throw new Error('Map.bodyParts: exceeds source limit');
+    }
+    return part;
+  });
+}
+
 // --- Parsers ---------------------------------------------------------------
 // Internal recursion state: a shared node counter and depth, threaded through
 // so the whole tree answers to LIMITS, not each subtree.
@@ -377,6 +402,9 @@ function parseMap(
       fail(where, 'bare: expected boolean');
     }
     out['bare'] = record['bare'];
+  }
+  if (record['bodyParts'] !== undefined) {
+    out['bodyParts'] = parseMapBodyParts(record['bodyParts'], out['children']);
   }
   return out as unknown as MapNode;
 }

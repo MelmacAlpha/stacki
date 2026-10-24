@@ -4,7 +4,7 @@
 
 import type { RichContext } from './RichContent';
 import { useState } from 'react';
-import { ResetMenu } from './PropFieldLabel';
+import { ResetMenu } from '../../ui/ResetLabel';
 import type { FieldPosition } from './propBindings';
 import { TagField } from './propNodeEditors';
 import PropField from './PropField';

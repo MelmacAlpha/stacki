@@ -14,6 +14,7 @@ import type { ParserNode, MapNode, CondNode } from './astroParserTypes';
 import { serializeAttrs } from './astroAttrs';
 import { blockHead } from './astroScan';
 import { isInlineRun, tagInlineRun, serializeNode } from './astroSerialize';
+import { serializeMapCallback } from './astroMapSerialize';
 
 // Where one node sits for the marked writer: its path, whether it is slot content (which decides
 // how its markers are written), whether it is one of its file's own roots (see `atRoot` below),
@@ -206,6 +207,21 @@ function serializeNodeMarkedMap(
   lines: string[],
   { path, atRoot, depth, stamp }: MarkedPlace,
 ): 'complete' | 'continue' {
+  if (node.bodyParts !== undefined) {
+    const text = serializeMapCallback(node, (child, index) => {
+      const marked: string[] = [];
+      serializeNodeMarked(child, '', marked, {
+        path: `${path}.${index}`,
+        inSlot: true,
+        atRoot,
+        depth: depth + 1,
+        stamp,
+      });
+      return '<Fragment>' + marked.join('\n') + '</Fragment>';
+    });
+    lines.push(indent + text);
+    return 'continue';
+  }
   // Loop children render once per item, so their marker pairs repeat in
   // the DOM — the collector unions every instance into one region.
   //

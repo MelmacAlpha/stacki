@@ -822,6 +822,11 @@ function shifted(path: readonly number[]): readonly number[] {
 
 // Beside a node, the list it sits in is written; inside it, its own content.
 function placeWritable(node: ProjectedNode, placement: Placement): boolean {
+  if (inside(placement)) {
+    if (node.callback === true) {
+      return false; // Separate return sites cannot receive one shared sibling insertion.
+    }
+  }
   return inside(placement) ? nodeEditable(node) : nodePlaceable(node);
 }
 

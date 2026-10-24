@@ -27,6 +27,7 @@ interface PreviewPaneProps {
   readonly spacingHover?: SpacingHover | undefined;
   readonly devUrl?: string | undefined;
   readonly devStatus?: string;
+  readonly coveredByBusyOverlay?: boolean;
   readonly devLog?: LiveValue<string> | undefined;
   readonly devDiag?: DevDiagnosis | undefined;
   readonly pathScope?: string;
@@ -242,6 +243,10 @@ function ResizeHandles({ sizing }: { readonly sizing: Sizing }) {
 }
 
 function PreviewPlaceholder({ props }: { readonly props: PreviewPaneProps }) {
+  // The app overlay owns progress while visible; another status would show through it.
+  if (props.coveredByBusyOverlay) {
+    return undefined;
+  }
   return (
     <div className="preview-placeholder">
       {props.devStatus === 'starting' ? (

@@ -149,7 +149,7 @@ const PIXEL =
   const actions = all('.actions button').map((button) => button.textContent.trim());
   check(
     'the actions read in that order',
-    actions.join(' | ') === 'Open Project… |  | Start from Lumos… | ',
+    actions.join(' | ') === 'Open from folder |  | Start from Lumos | ',
     actions.join(' | '),
   );
   check(
@@ -166,12 +166,12 @@ const PIXEL =
     return { canceled: true };
   };
   await act(async () => all('.actions button')[0].click());
-  check('the main Open Project button opens the folder picker', folderRequests === 1);
+  check('the main Open from folder button opens the folder picker', folderRequests === 1);
   const arrows = all('.welcome-split-arrow');
   await act(async () => arrows[0].click());
   check(
     'the open menu reveals GitHub',
-    all('[role=menuitem]')[0]?.textContent === 'Open from GitHub…',
+    all('[role=menuitem]')[0]?.textContent === 'Open from GitHub',
   );
   check(
     'opening the menu focuses its action',
@@ -192,7 +192,7 @@ const PIXEL =
   await act(async () => arrows[1].click());
   check(
     'the starter menu reveals the empty project option',
-    all('[role=menuitem]')[0]?.textContent === 'Empty Astro project…',
+    all('[role=menuitem]')[0]?.textContent === 'Start from Astro',
   );
   let emptyRequests = 0;
   dom.window.avb.parentDialog = async () => {

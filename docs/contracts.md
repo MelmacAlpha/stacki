@@ -28,6 +28,19 @@ enforce these invariants:
   for a page result's `bail` and a Markdown model's `layoutPath`.
 - Attribute variants are `string`, `expr`, `bare`, or `spread`. The value field
   exists only on variants that need it.
+- General `.map()` callbacks carry `bodyParts`: bounded JavaScript slices interleaved
+  with their markup children, with exactly one more slice than child. Arrow, async,
+  function, typed, destructured, and referenced callbacks are recognized by the
+  TypeScript syntax parser. Early returns, nested scopes, and the optional `thisArg`
+  stay in those slices; preview markers wrap each markup root as one expression.
+  Callback roots are separate expression sites, so the projection marks the container
+  with `callback: true`; inserting into it cannot silently choose a return branch.
+  Its element attributes and nested markup remain editable through ordinary intents.
+  Referenced callbacks remain loops without invented children: their markup belongs
+  to the referenced implementation, not to the call site.
+
+  TypeScript was already a runtime dependency. Its package is also unpacked beside the
+  preview parser because the project's plain Node process cannot load it from ASAR.
 - Import slots, attribute order, original tag text, line endings, blank lines, Markdown
   fences, list markers, indentation, and trailing blanks are source-preserving
   data. A parse/write round trip must retain them even when the editor does not
