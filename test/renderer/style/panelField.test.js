@@ -123,6 +123,16 @@ const check = (what, condition, detail) => {
        const win = new BrowserWindow({ show: false, width: 900, height: 700 });
        await win.loadFile(${JSON.stringify(path.join(buildDirectory, 'index.html'))});
        const js = (code) => win.webContents.executeJavaScript(code);
+       // Hidden windows and busy runners can delay the popup's exit timer. Wait
+       // for its actual removal before aiming a press at the row underneath.
+       const waitForPopup = async (state) => {
+         for (let attempt = 0; attempt < 100; attempt++) {
+           const present = await js("!!document.querySelector('.embed-editor_layer-popover')");
+           if (present === (state === 'open')) return;
+           await new Promise((resolve) => setTimeout(resolve, 50));
+         }
+         throw new Error('Transition popup did not become ' + state);
+       };
        await new Promise((r) => setTimeout(r, 400));
        // A window that is not on screen does not run transitions, so a transitioned
        // box-shadow would read as its starting value forever. Nothing here is about
@@ -148,6 +158,7 @@ const check = (what, condition, detail) => {
        const layerRow = await rowAt(1);
        await new Promise((r) => setTimeout(r, 120));
        if (layerRow) await clickAt(layerRow.x, layerRow.y);
+       await waitForPopup('open');
        const opening = {
          open: await js("!!document.querySelector('.embed-editor_layer-popover')"),
          foundRow: !!layerRow,
@@ -183,9 +194,10 @@ const check = (what, condition, detail) => {
        // another row would land on the popover instead.
        win.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Escape' });
        win.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Escape' });
-       await new Promise((r) => setTimeout(r, 220));
+       await waitForPopup('closed');
        const plainRow = await rowAt(0);
        if (plainRow) await clickAt(plainRow.x, plainRow.y);
+       await waitForPopup('open');
        out.plainFields = await js("(() => { const pop = " +
          "document.querySelector('.embed-editor_layer-popover'); if (!pop) return null; " +
          "const shape = (el) => { const c = getComputedStyle(el); " +

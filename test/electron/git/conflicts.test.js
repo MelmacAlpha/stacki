@@ -68,6 +68,26 @@ const conflicted = [
   );
 }
 
+// Windows marker endings must be recognized without rewriting the source's EOLs.
+{
+  const windows = conflicted.replaceAll('\n', '\r\n');
+  const parts = parseConflict(windows);
+  check('CRLF markers produce both decisions', clashCount(parts) === 2);
+  const expected = renderResolved(parseConflict(conflicted), ['ours', 'theirs']).replaceAll(
+    '\n',
+    '\r\n',
+  );
+  check(
+    'CRLF choices preserve every line ending',
+    renderResolved(parts, ['ours', 'theirs']) === expected,
+  );
+  const unclosed = 'before\r\n<<<<<<< HEAD\r\nkeep this\r\n';
+  check(
+    'unclosed CRLF markers preserve all bytes',
+    renderResolved(parseConflict(unclosed)) === unclosed,
+  );
+}
+
 // --- Putting it back --------------------------------------------------------
 {
   const parts = parseConflict(conflicted);

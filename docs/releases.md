@@ -15,7 +15,7 @@ Use an isolated checkout when other tasks are editing the working directory. Mat
 Studio, Studio release manifest, and npm starter versions. Never move an existing release tag to
 include later changes.
 
-## 0.1.77 updates
+## 0.1.78 updates
 
 - Merge review now opens in a wider, editable final-code view. Branch-colored highlights show
   where each change came from, with independent choices for text and attributes, manual overrides,
@@ -26,6 +26,18 @@ include later changes.
 - Merge confirmation has cleaner spacing and shorter copy.
 - Content fields preserve the caret when deleting spaces, so Backspace continues editing where
   expected instead of jumping to the beginning.
+
+### 0.1.77 release validation
+
+The 0.1.77 release was stopped before publication after Windows CI exposed CRLF conflict markers
+being treated as ordinary source. A local reproduction with `core.autocrlf=true` failed the same
+real-Git merge test. The parser now accepts CRLF marker endings while retaining source line endings;
+regression checks cover both Git conversion modes, exact output, and unclosed markers.
+
+An Ubuntu check also read a popup before its exit timer removed it. The browser probe now waits
+for bounded popup presence/removal instead of assuming a fixed sleep is enough. This scheduler
+race did not reproduce locally; the strengthened probe passes locally and still runs in CI.
+The replacement is 0.1.78; the existing 0.1.77 tag and unpublished draft are retained for diagnosis.
 
 ## 0.1.76 updates
 

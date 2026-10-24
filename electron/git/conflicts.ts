@@ -347,10 +347,12 @@ function whoChanged(
   return 'both';
 }
 
-const START = /^<<<<<<< ?(.*)$/;
+// Lines retain their carriage returns so resolving a Windows file preserves its
+// bytes. Match CRLF marker endings without normalizing the surrounding content.
+const START = /^<<<<<<< ?(.*)\r?$/;
 const MIDDLE = /^=======\s*$/;
-const BASE = /^\|\|\|\|\|\|\| ?(.*)$/; // only present under diff3 conflict style
-const END = /^>>>>>>> ?(.*)$/;
+const BASE = /^\|\|\|\|\|\|\| ?(.*)\r?$/; // Only present under diff3 conflict style.
+const END = /^>>>>>>> ?(.*)\r?$/;
 
 export type ConflictPart =
   | { readonly kind: 'same'; readonly text: string }

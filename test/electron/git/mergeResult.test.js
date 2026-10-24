@@ -16,11 +16,12 @@ const { parseIpcPayload } = require('#dist/shared/ipc/ipcPayloads.js');
 const git = (cwd, args) => execute('git', args, { cwd });
 const command = async (cwd, ...args) => (await git(cwd, args)).stdout.trim();
 
-async function fixture() {
+async function fixture(autoCRLF = 'false') {
   const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'stacki-merge-result-'));
   await command(directory, 'init', '--initial-branch=main');
   await command(directory, 'config', 'user.name', 'Merge Test');
   await command(directory, 'config', 'user.email', 'merge@example.com');
+  await command(directory, 'config', 'core.autocrlf', autoCRLF);
   const base = '<Heading id="hero" class="old">Welcome</Heading>\n';
   const save = async (text) => {
     await fs.writeFile(path.join(directory, 'index.astro'), text);
@@ -47,31 +48,33 @@ async function fixture() {
   return { directory, save, result, choices };
 }
 
-test('edited result keeps independent edits and creates one ordinary merge commit', async () => {
-  const value = await fixture();
-  try {
-    const payload = parseIpcPayload('git:resolveMerge', {
-      projectPath: value.directory,
-      branch: 'topic',
-      choices: value.choices,
-    });
-    const result = await resolveMerge(git, payload);
-    assert.equal(result.ok, true);
-    assert.equal(
-      await fs.readFile(path.join(value.directory, 'index.astro'), 'utf8'),
-      value.result,
-    );
-    assert.match(value.result, /id="custom" class="new">Hello world/);
-    assert.equal(
-      (await command(value.directory, 'rev-list', '--parents', '-n', '1', 'HEAD')).split(' ')
-        .length,
-      3,
-    );
-    assert.equal(await command(value.directory, 'status', '--porcelain'), '');
-  } finally {
-    await fs.rm(value.directory, { recursive: true, force: true });
-  }
-});
+for (const autoCRLF of ['false', 'true']) {
+  test(`edited result keeps independent edits with core.autocrlf=${autoCRLF}`, async () => {
+    const value = await fixture(autoCRLF);
+    try {
+      const payload = parseIpcPayload('git:resolveMerge', {
+        projectPath: value.directory,
+        branch: 'topic',
+        choices: value.choices,
+      });
+      const result = await resolveMerge(git, payload);
+      assert.equal(result.ok, true);
+      assert.equal(
+        await fs.readFile(path.join(value.directory, 'index.astro'), 'utf8'),
+        value.result,
+      );
+      assert.match(value.result, /id="custom" class="new">Hello world/);
+      assert.equal(
+        (await command(value.directory, 'rev-list', '--parents', '-n', '1', 'HEAD')).split(' ')
+          .length,
+        3,
+      );
+      assert.equal(await command(value.directory, 'status', '--porcelain'), '');
+    } finally {
+      await fs.rm(value.directory, { recursive: true, force: true });
+    }
+  });
+}
 
 test('stale source, target branch, and clean reruns never commit an outdated result', async () => {
   const value = await fixture();
