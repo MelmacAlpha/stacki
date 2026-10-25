@@ -15,6 +15,14 @@ Use an isolated checkout when other tasks are editing the working directory. Mat
 Studio, Studio release manifest, and npm starter versions. Never move an existing release tag to
 include later changes.
 
+## 0.1.79 updates
+
+- New Astro and Lumos projects let you choose npm or pnpm. Stacki checks that the chosen
+  manager is installed before creating the project and includes its lockfile in the first commit.
+- Selected starter templates use a white background with dark text and preserve their spacing.
+- Desktop, the Studio source bundle, and `npm create stacki@latest` share version 0.1.79,
+  including the editable merge review and Windows merge fixes from 0.1.78.
+
 ## 0.1.78 updates
 
 - Merge review now opens in a wider, editable final-code view. Branch-colored highlights show

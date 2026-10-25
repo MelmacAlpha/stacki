@@ -4600,8 +4600,14 @@ body > .embed-editor_provenance {
   background: var(--bg-hover);
 }
 .template-option.on {
-  border-color: var(--accent);
-  background: var(--accent-soft);
+  border: 0;
+  /* Replace the border's space so selecting a starter does not shift its content. */
+  padding: 9px 11px;
+  background: #ffffff;
+  color: #191919;
+}
+.template-option.on .template-hint {
+  color: #444444;
 }
 .template-name {
   font-size: 12px;
