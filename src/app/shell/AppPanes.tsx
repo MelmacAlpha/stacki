@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { ResizablePanel } from './ResizablePanel';
 import { ElementContextMenu } from '../../features/structure/ElementContextMenu';
 import type { ContextPosition } from '../../features/structure/StructureContextMenu';
 import type { ContextPoint } from '../../features/preview/contextPosition';
@@ -297,13 +298,13 @@ export function OldVersionCover({ app }: { readonly app: ShellView }) {
 
 export function RightPanel({ app }: { readonly app: ShellView }) {
   return (
-    <div className="panel right">
+    <ResizablePanel kind="right">
       <RightTabs app={app} />
       {app.rightTab === 'style' && <StyleTab app={app} />}
       <div style={{ display: app.rightTab === 'settings' ? 'contents' : 'none' }}>
         <PropsPanel {...settingsValues(app)} {...settingsHandlers(app)} />
       </div>
-    </div>
+    </ResizablePanel>
   );
 }
 
