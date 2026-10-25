@@ -262,8 +262,10 @@ no operation replaces a whole file.
 - `capability.ts` — `editable` | `read-only-opaque` | `repeated-source-node` |
   `runtime-aggregate` | `unsupported`; `editable` and (since step 7)
   `repeated-source-node` accept visual intents: a node a loop repeats is one
-  source node, and an edit of it changes every copy. Nothing is placed beside
-  it (the loop body is code), and a stale intent whose node changed capability
+  source node, and an edit of it changes every copy. Sibling placement inside
+  an element or component preserves that markup list and its loop bindings;
+  placement beside a direct loop or branch return root remains refused because
+  that list is JavaScript. A stale intent whose node changed capability
   since it was authored — wrapped in a loop outside Stacki — is refused
   `region-externally-modified`. The renderer shows every other capability
   beside the selection (`src/editor/nodeCapability.ts`, `CapabilityNotice`).
