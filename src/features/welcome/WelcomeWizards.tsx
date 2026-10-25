@@ -7,6 +7,12 @@ import {
   subscribeCreateLog,
   type ProjectTemplate,
 } from './welcomeBridge';
+import {
+  CREATE_PACKAGE_MANAGERS,
+  packageManagerLabel,
+  type CreatePackageManager,
+} from '../../../shared/properties/packageManager';
+import Dropdown from '../../ui/Dropdown';
 
 const CREATE_LOG_CHARS_MAX = 20_000;
 const SITE_NAME_DEFAULT = 'my-site';
@@ -38,6 +44,7 @@ export function StarterWizard({
   onDone,
 }: WizardProps & { readonly parentPath: string }) {
   const [name, setName] = useState(SITE_NAME_DEFAULT);
+  const [manager, setManager] = useState<CreatePackageManager>('npm');
   const [state, setState] = useState<RunState>({ kind: 'idle' });
   const log = useCreateLog();
   const cleanName = name.trim();
@@ -46,7 +53,7 @@ export function StarterWizard({
   const run = async (): Promise<void> => {
     setState({ kind: 'running' });
     log.clear();
-    const result = await createStarterProject(parentPath, cleanName);
+    const result = await createStarterProject(parentPath, cleanName, manager);
     if (!result.ok) {
       setState({ kind: 'error', message: result.error });
     } else if (!result.value.ok) {
@@ -78,11 +85,20 @@ export function StarterWizard({
         change={setName}
         submit={() => void run()}
       />
+      <PackageManagerField value={manager} disabled={running} change={setManager} />
       <div className="starter-note">
-        Runs <code>npm create lumos@latest</code>, then starts a git history of its own — so
-        publishing it later publishes your site, not a fork of the starter.
+        Runs <code>npm create lumos@latest</code>
+        {manager !== 'npm' && (
+          <>
+            , installs it with <code>{manager}</code>
+          </>
+        )}
+        , then starts a git history of its own — so publishing it later publishes your site, not a
+        fork of the starter.
       </div>
-      {(running || log.text) && <CreateLog log={log.text} elementRef={log.elementRef} />}
+      {(running || log.text) && (
+        <CreateLog log={log.text} running={running} elementRef={log.elementRef} />
+      )}
       {state.kind === 'error' && <ErrorToast message={state.message} />}
     </WizardFrame>
   );
@@ -98,6 +114,7 @@ export function NewProjectWizard({
   const [install, setInstall] = useState(true);
   const [git, setGit] = useState(true);
   const [ai, setAi] = useState(false);
+  const [packageManager, setPackageManager] = useState<CreatePackageManager>('npm');
   const [state, setState] = useState<RunState>({ kind: 'idle' });
   const log = useCreateLog();
   const running = state.kind === 'running';
@@ -105,7 +122,7 @@ export function NewProjectWizard({
   const run = async (): Promise<void> => {
     setState({ kind: 'running' });
     log.clear();
-    const options = { parentPath, name: name.trim(), template, install, git, ai };
+    const options = { parentPath, name: name.trim(), template, install, git, ai, packageManager };
     const result = await createAstroProject(options);
     if (result.ok) {
       onDone(result.value.projectPath);
@@ -142,6 +159,8 @@ export function NewProjectWizard({
           install={install}
           git={git}
           ai={ai}
+          manager={packageManager}
+          setManager={setPackageManager}
           setTemplate={setTemplate}
           setInstall={setInstall}
           setGit={setGit}
@@ -149,7 +168,7 @@ export function NewProjectWizard({
         />
       )}
       {state.kind !== 'idle' && (
-        <CreateLog log={log.text || 'Starting…'} elementRef={log.elementRef} />
+        <CreateLog log={log.text || 'Starting…'} running={running} elementRef={log.elementRef} />
       )}
       {state.kind === 'error' && <ErrorToast message={state.message} />}
     </WizardFrame>
@@ -203,6 +222,30 @@ function SiteNameField(props: {
   );
 }
 
+// The manager that installs the new site. The main process checks it is installed first.
+function PackageManagerField(props: {
+  readonly value: CreatePackageManager;
+  readonly disabled: boolean;
+  readonly change: (manager: CreatePackageManager) => void;
+}) {
+  return (
+    <div className="starter-field">
+      <span>Package manager</span>
+      <Dropdown
+        ariaLabel="Package manager"
+        value={props.value}
+        disabled={props.disabled}
+        livePreview={false}
+        options={CREATE_PACKAGE_MANAGERS.map((manager) => ({
+          value: manager,
+          label: packageManagerLabel(manager),
+        }))}
+        onChange={props.change}
+      />
+    </div>
+  );
+}
+
 function useCreateLog() {
   const [text, setText] = useState('');
   const elementRef = useRef<HTMLPreElement>(null);
@@ -252,6 +295,8 @@ interface ProjectChoicesProps {
   readonly install: boolean;
   readonly git: boolean;
   readonly ai: boolean;
+  readonly manager: CreatePackageManager;
+  readonly setManager: (manager: CreatePackageManager) => void;
   readonly setTemplate: (template: ProjectTemplate) => void;
   readonly setInstall: (value: boolean) => void;
   readonly setGit: (value: boolean) => void;
@@ -276,6 +321,11 @@ function ProjectChoices(props: ProjectChoicesProps) {
           ))}
         </div>
       </div>
+      <PackageManagerField
+        value={props.manager}
+        disabled={!props.install}
+        change={props.setManager}
+      />
       <CheckRow label="Install dependencies" checked={props.install} change={props.setInstall} />
       <CheckRow label="Initialize a new git repository" checked={props.git} change={props.setGit} />
       <CheckRow label="Add AI agent files" checked={props.ai} change={props.setAi} />
@@ -304,16 +354,21 @@ function CheckRow({
   );
 }
 
+// While it runs, dots animate after the last line, as a terminal shows work in progress:
+// installs and downloads can print nothing for a long time.
 function CreateLog({
   log,
+  running,
   elementRef,
 }: {
   readonly log: string;
+  readonly running: boolean;
   readonly elementRef: React.RefObject<HTMLPreElement>;
 }) {
   return (
     <pre className="create-log" ref={elementRef}>
-      {log}
+      {running ? log.trimEnd() : log}
+      {running && <span className="create-log-dots" aria-label="Working" />}
     </pre>
   );
 }

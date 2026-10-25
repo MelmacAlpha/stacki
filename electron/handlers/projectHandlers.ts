@@ -1,18 +1,24 @@
 // The project IPC: opening and creating projects (from a dialog, the Astro
-// template, a starter or a scaffold), and installing their dependencies.
+// template or a starter), and installing their dependencies.
 
 import { gitErrorDetail } from '../git/git';
 import { toRecord } from '../../shared/core/record';
 import { assert } from '../../shared/core/assert';
 import * as path from 'path';
 import * as fs from 'fs';
-import { spawn } from 'child_process';
-import { scaffoldProject } from '../project/scaffold';
-import { createStarter, newSiteDirectory } from '../project/starter';
-import { isWin, errorMessage } from '../lib/mainHelpers';
+import * as os from 'os';
+import {
+  createStarter,
+  newSiteDirectory,
+  runCreateCommand,
+  startSiteHistory,
+  STARTERS,
+} from '../project/starter';
+import { isWin } from '../lib/mainHelpers';
 import { ensureToolPath, run } from '../lib/nodeTools';
 import { isAstroProject } from '../project/projectFiles';
 import { detectPackageManager, installArguments } from '../project/packageManager';
+import { packageManagerLabel, type PackageManager } from '../../shared/properties/packageManager';
 import type { MainHost } from './mainHost';
 
 export function registerProjectHandlers(
@@ -20,6 +26,7 @@ export function registerProjectHandlers(
 ): void {
   registerProjectOpenDialogHandlers(host);
   registerProjectCreateAstroHandlers(host);
+  registerProjectCreateStarterHandlers(host);
 }
 
 function registerProjectOpenDialogHandlers({
@@ -67,9 +74,13 @@ function registerProjectCreateAstroHandlers({
       install = true,
       git = true,
       ai = false,
+      packageManager = 'npm',
     } = options || {};
     const directory = newSiteDirectory(parentPath, name);
     ensureToolPath(); // npm is a Node shim — same PATH problem as astro
+    if (install) {
+      await requirePackageManager(packageManager);
+    }
     fs.mkdirSync(directory);
 
     const args = [
@@ -79,8 +90,8 @@ function registerProjectCreateAstroHandlers({
       '--',
       '--template',
       template,
-      install ? '--install' : '--no-install',
-      git ? '--git' : '--no-git',
+      '--no-install', // Stacki installs, then makes the first commit (finishNewSite).
+      '--no-git',
       ...(ai ? [] : ['--no-ai']),
       '--skip-houston',
       '--yes', // accept defaults for anything not covered above
@@ -88,6 +99,12 @@ function registerProjectCreateAstroHandlers({
 
     send('create:log', `> npm ${args.join(' ')}\n\n`);
     await runCreateAstroInNewFolder({ send }, directory, args);
+    await finishNewSite({ send }, directory, {
+      install,
+      manager: packageManager,
+      history: git,
+      label: 'Astro',
+    });
     return { ok: true as const, installed: install, projectPath: directory };
   });
 
@@ -103,37 +120,44 @@ function registerProjectCreateAstroHandlers({
     }
     return { canceled: false as const, parentPath: result.filePaths[0] };
   });
+}
 
+function registerProjectCreateStarterHandlers({
+  ipcMain,
+  send,
+}: Pick<MainHost, 'ipcMain' | 'send'>): void {
   // Starting from a starter. The scaffolder, the first commit and the package's
   // name are in ./starter.js; what is here is the install that follows and the
   // log the wizard reads.
   ipcMain.handle(
     'project:createStarter',
-    async (_event, { starter = 'lumos', parentPath, name }) => {
+    async (_event, { starter = 'lumos', parentPath, name, packageManager = 'npm' }) => {
       ensureToolPath(); // npm and git are both on the PATH the Dock does not have
+      await requirePackageManager(packageManager);
       const result = await createStarter({
         starter,
         parentPath,
         name,
         onLog: (text) => send('create:log', text),
       });
-      send('create:log', '\n> installing dependencies\n');
-      await installDependencies({ send }, result.projectPath);
-      send('progress', PROGRESS_CLEARED);
+      const label = STARTERS[starter]?.label ?? starter;
+      await finishNewSite({ send }, result.projectPath, {
+        install: true,
+        manager: packageManager,
+        history: true,
+        label,
+      });
       return result;
     },
   );
-
-  ipcMain.handle('project:scaffold', async (_event, { dir: directory, name }) => {
-    scaffoldProject(directory, name);
-    await installDependencies({ send }, directory);
-    return { ok: true as const };
-  });
 }
 
-export async function installDependencies({ send }: Pick<MainHost, 'send'>, directory: string) {
+export async function installDependencies(
+  { send }: Pick<MainHost, 'send'>,
+  directory: string,
+  pm: PackageManager = detectPackageManager(directory),
+) {
   ensureToolPath(); // npm/pnpm/yarn are Node shims — same PATH problem as astro
-  const pm = detectPackageManager(directory);
   send('progress', { message: `Installing dependencies (${pm} install)…` });
   try {
     await run(isWin ? `${pm}.cmd` : pm, [...installArguments(pm)], directory, {
@@ -148,6 +172,46 @@ export async function installDependencies({ send }: Pick<MainHost, 'send'>, dire
     }
     throw new Error(`${pm} install failed: ${gitErrorDetail(error).slice(-400)}`);
   }
+}
+
+// A new site is only started when its manager can install it, so a missing one fails before
+// any folder exists. On Windows a missing command fails without ENOENT, so any failure counts.
+async function requirePackageManager(manager: PackageManager): Promise<void> {
+  try {
+    await run(isWin ? `${manager}.cmd` : manager, ['--version'], os.homedir());
+  } catch {
+    throw new Error(`${packageManagerLabel(manager)} is not installed. Install it or choose npm.`);
+  }
+}
+
+// The install comes first, so the site's first commit includes the lockfile. The site gets
+// its history even when the install fails; the install error still reaches the wizard.
+async function finishNewSite(
+  { send }: Pick<MainHost, 'send'>,
+  directory: string,
+  options: {
+    readonly install: boolean;
+    readonly manager: PackageManager;
+    readonly history: boolean;
+    readonly label: string;
+  },
+): Promise<void> {
+  const onLog = (text: string): void => send('create:log', text);
+  try {
+    if (options.install) {
+      // A starter's npm lockfile would sit beside the chosen manager's own and misname it.
+      if (options.manager !== 'npm') {
+        fs.rmSync(path.join(directory, 'package-lock.json'), { force: true });
+      }
+      onLog(`\n> installing dependencies with ${packageManagerLabel(options.manager)}\n`);
+      await installDependencies({ send }, directory, options.manager);
+    }
+  } finally {
+    if (options.history) {
+      await startSiteHistory(directory, options.label, onLog);
+    }
+  }
+  send('progress', PROGRESS_CLEARED);
 }
 
 // Clears the progress line: no message (src/ipc/appBridge.ts, onAppProgress). IPC is
@@ -174,57 +238,14 @@ async function runCreateAstroInNewFolder(
 
 // The create-astro run itself, its output streamed to the wizard's log. It
 // settles once the CLI exits and a package.json has landed in `directory`.
-function runCreateAstro(
+async function runCreateAstro(
   { send }: Pick<MainHost, 'send'>,
   directory: string,
   args: readonly string[],
 ): Promise<void> {
-  return new Promise((resolve, reject) => {
-    let proc;
-    try {
-      proc = spawn(isWin ? 'npm.cmd' : 'npm', [...args], {
-        cwd: directory,
-        shell: isWin,
-        env: { ...process.env, FORCE_COLOR: '0', NO_COLOR: '1', CI: '1' },
-      });
-    } catch (error: unknown) {
-      reject(new Error(`Could not run npm: ${errorMessage(error)}`));
-      return;
-    }
-
-    let tail = '';
-    const onOut = (chunk: Buffer) => {
-      // create-astro animates with cursor moves and line clears; strip the
-      // escape codes so the log pane reads as plain text.
-      const text = chunk
-        .toString()
-        .replace(/\x1b\[[0-9;?]*[A-Za-z]/g, '')
-        .replace(/\r/g, '\n');
-      tail = (tail + text).slice(-4000);
-      send('create:log', text);
-    };
-    proc.stdout.on('data', onOut);
-    proc.stderr.on('data', onOut);
-    proc.on('error', (error) => {
-      reject(
-        new Error(
-          toRecord(error)?.['code'] === 'ENOENT'
-            ? 'npm could not be found. Install Node.js (which includes npm) and try again.'
-            : `Could not run npm: ${errorMessage(error)}`,
-        ),
-      );
-    });
-    proc.on('exit', (code) => {
-      if (code === 0) {
-        // Sanity-check that a project actually landed.
-        if (!fs.existsSync(path.join(directory, 'package.json'))) {
-          reject(new Error(`create-astro finished but no package.json appeared.\n\n${tail}`));
-          return;
-        }
-        resolve();
-      } else {
-        reject(new Error(`create-astro exited with code ${code}.\n\n${tail}`));
-      }
-    });
-  });
+  const npm = isWin ? 'npm.cmd' : 'npm';
+  await runCreateCommand(npm, args, directory, (text) => send('create:log', text));
+  if (!fs.existsSync(path.join(directory, 'package.json'))) {
+    throw new Error('create-astro finished but no package.json appeared.');
+  }
 }

@@ -270,6 +270,19 @@ const PIXEL =
       !!wizard?.querySelector('input') && /\/tmp\/sites\/my-site/.test(wizard?.textContent || ''),
       wizard?.textContent?.slice(0, 200),
     );
+    const note = () => wizard.querySelector('.starter-note')?.textContent || '';
+    check(
+      'with npm, the note names only the command it runs',
+      note().startsWith('Runs npm create lumos@latest, then starts a git history'),
+      note(),
+    );
+    await act(async () => wizard.querySelector('.dd-trigger').click());
+    await act(async () => dom.window.document.querySelectorAll('.dd-option')[1].click());
+    check(
+      'with pnpm, it also says pnpm installs it',
+      note().startsWith('Runs npm create lumos@latest, installs it with pnpm, then starts'),
+      note(),
+    );
 
     // Cancelling the folder dialog leaves the screen where it was.
     await act(async () => {
@@ -292,9 +305,13 @@ const PIXEL =
   {
     dom.window.avb.parentDialog = async () => ({ canceled: false, parentPath: '/tmp/sites' });
     const created = [];
-    dom.window.avb.createAstroProject = async (payload) => {
+    let finish = () => {};
+    // Held open until `finish`, so the test can look at the wizard while it runs.
+    dom.window.avb.createAstroProject = (payload) => {
       created.push(payload);
-      return { ok: true, installed: true, projectPath: '/tmp/sites/blog-site' };
+      return new Promise((resolve) => {
+        finish = () => resolve({ ok: true, installed: true, projectPath: '/tmp/sites/blog-site' });
+      });
     };
     await act(async () => all('.actions button')[3].click());
     await act(async () => {
@@ -329,8 +346,37 @@ const PIXEL =
       );
       input.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
     });
+    const trigger = wizard.querySelector('.dd-trigger');
+    check(
+      'the package manager is npm by default',
+      trigger?.textContent === 'npm',
+      trigger?.outerHTML,
+    );
+    await act(async () => trigger.click());
+    const managers = [...dom.window.document.querySelectorAll('.dd-option')];
+    check(
+      'and offers npm and pnpm',
+      managers.map((option) => option.textContent).join() === 'npm,pnpm',
+      managers.map((option) => option.textContent).join(),
+    );
+    await act(async () => managers[1].click());
+    check('picking pnpm shows it', trigger?.textContent === 'pnpm', trigger?.textContent);
     await act(async () => {
       create().click();
+      await settle(30);
+    });
+    check(
+      'and the one chosen is sent with the site',
+      created[0]?.packageManager === 'pnpm',
+      JSON.stringify(created),
+    );
+    check(
+      'while it runs, dots animate after the last line of the log',
+      !!wizard.querySelector('.create-log .create-log-dots'),
+      wizard.querySelector('.create-log')?.outerHTML,
+    );
+    await act(async () => {
+      finish();
       await settle(30);
     });
     check(
