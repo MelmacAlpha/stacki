@@ -248,6 +248,18 @@ try {
   );
 } catch (error) {
   await first.screenshot({ path: 'test-results/browser-failure.png' }).catch(() => {});
+  console.error('Browser page errors:', errors);
+  // Error overlays live inside preview frames; their stack is absent from the inspector.
+  for (const frame of first.frames().slice(0, 10)) {
+    console.error(
+      'Preview error details:',
+      frame.url(),
+      await frame
+        .locator('#message-content, #stack-content')
+        .evaluateAll((nodes) => nodes.slice(0, 4).map((node) => node.textContent?.slice(0, 16000)))
+        .catch(() => []),
+    );
+  }
   console.error(
     'Inspector at failure:',
     await first

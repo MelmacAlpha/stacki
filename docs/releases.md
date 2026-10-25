@@ -23,6 +23,23 @@ include later changes.
 - Desktop, the Studio source bundle, and `npm create stacki@latest` share version 0.1.79,
   including the editable merge review and Windows merge fixes from 0.1.78.
 
+### 0.1.79 browser failure investigation
+
+The first hosted Studio browser run failed after leaving interactive preview: Astro's
+`Unhandled rejection` overlay added another heading, so Playwright correctly refused the
+ambiguous selector. The log captured the overlay title but omitted its error message and stack;
+it does not establish the underlying cause. All Desktop platform gates and installers passed.
+
+The exact release passed locally with the installed Chrome and with the same Chromium version
+used by CI. Four additional runs, each with a new draft workspace and server, also passed.
+This macOS reproduction cannot establish why the Linux runner showed the overlay. A rerun of
+the unchanged tagged Studio job must still pass before the draft can become public.
+
+Future browser failures now log bounded preview error messages and stacks alongside the editor
+inspector and browser errors. The assertions, selectors, and timeouts remain unchanged; an error
+overlay must not be hidden by narrowing the heading selector. These diagnostic-only test changes
+do not change the tagged application or its published npm package.
+
 ## 0.1.78 updates
 
 - Merge review now opens in a wider, editable final-code view. Branch-colored highlights show
