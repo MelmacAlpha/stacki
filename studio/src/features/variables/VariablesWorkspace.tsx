@@ -24,10 +24,10 @@ export function VariablesWorkspace({
     },
     [document],
   );
-  if (props.view.panel !== 'variables') {
-    return null;
-  }
   if (!props.view.variable) {
+    if (props.view.panel !== 'variables') {
+      return null;
+    }
     return (
       <div className="cms-view studio-variables-empty">
         <p>Select a stylesheet to edit its variables.</p>
@@ -38,10 +38,11 @@ export function VariablesWorkspace({
     <VariablesView
       project={{ path: 'studio' }}
       selected={props.view.variable}
+      hidden={props.view.panel !== 'variables'}
+      onDock={() => props.view.setPanel('variables')}
       onClose={() => {
-        if (window.matchMedia('(max-width: 700px)').matches) {
-          props.view.setVariable(undefined);
-        } else {
+        props.view.setVariable(undefined);
+        if (!window.matchMedia('(max-width: 700px)').matches) {
           props.view.setPanel(undefined);
         }
       }}

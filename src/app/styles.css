@@ -1964,6 +1964,7 @@ html[data-platform='win32'] .titlebar {
   overflow: hidden;
 }
 .code-window-header {
+  touch-action: none;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -1993,67 +1994,6 @@ html[data-platform='win32'] .titlebar {
 }
 .code-window-body .cm-host .cm-editor {
   height: 100%;
-}
-
-.cw-rz {
-  position: absolute;
-  z-index: 2;
-}
-.cw-rz-n {
-  top: -3px;
-  left: 8px;
-  right: 8px;
-  height: 6px;
-  cursor: ns-resize;
-}
-.cw-rz-s {
-  bottom: -3px;
-  left: 8px;
-  right: 8px;
-  height: 6px;
-  cursor: ns-resize;
-}
-.cw-rz-e {
-  right: -3px;
-  top: 8px;
-  bottom: 8px;
-  width: 6px;
-  cursor: ew-resize;
-}
-.cw-rz-w {
-  left: -3px;
-  top: 8px;
-  bottom: 8px;
-  width: 6px;
-  cursor: ew-resize;
-}
-.cw-rz-se {
-  right: -3px;
-  bottom: -3px;
-  width: 12px;
-  height: 12px;
-  cursor: nwse-resize;
-}
-.cw-rz-nw {
-  left: -3px;
-  top: -3px;
-  width: 12px;
-  height: 12px;
-  cursor: nwse-resize;
-}
-.cw-rz-sw {
-  left: -3px;
-  bottom: -3px;
-  width: 12px;
-  height: 12px;
-  cursor: nesw-resize;
-}
-.cw-rz-ne {
-  right: -3px;
-  top: -3px;
-  width: 12px;
-  height: 12px;
-  cursor: nesw-resize;
 }
 
 /* Breadcrumbs (canvas toolbar) */
@@ -6597,9 +6537,6 @@ body > .embed-editor_provenance {
    The same sheet the CMS uses, with a table in it. Columns are either the
    rules a variable is declared in (a theme and its modes) or the things a
    family of names describes (h1…h6) — see electron/project/cssVars.ts. */
-.vars-view .cms-detail {
-  width: 100%;
-}
 /* Shared column bounds keep each group's headings and values aligned. Values
    shrink from their preferred width before wide sets need horizontal scroll. */
 .vars-body {
@@ -6687,7 +6624,19 @@ body > .embed-editor_provenance {
 .vars-body > .props-empty {
   padding-left: var(--vars-inset);
 }
+.vars-view .cms-detail-title,
+.vars-view .cms-detail-path {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.vars-view .cms-saved {
+  flex-shrink: 0;
+}
 .vars-search {
+  min-width: 80px;
+  flex-shrink: 1;
   height: 24px;
   width: 180px;
   margin-left: auto;

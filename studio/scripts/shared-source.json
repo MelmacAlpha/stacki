@@ -582,9 +582,12 @@
     "src/ui/AssetThumb.tsx",
     "src/ui/AutoTextarea.tsx",
     "src/ui/DateField.tsx",
+    "src/ui/DockableWindow.tsx",
     "src/ui/HtmlField.tsx",
     "src/ui/HtmlToolbar.tsx",
+    "src/ui/WindowResizeHandles.tsx",
     "src/ui/dateFieldModel.ts",
+    "src/ui/dockableWindow.css",
     "src/ui/htmlFieldModel.ts",
     "src/ui/contentInputs.css",
     "src/ui/CodeAccess.tsx",
@@ -621,7 +624,10 @@
     "src/ui/usePointerDrag.ts",
     "shared/properties/publishReview.ts",
     "electron/project/publishReviewRequest.ts",
-    "src/features/publishing/PublishWorkflow.tsx"
+    "src/features/publishing/PublishWorkflow.tsx",
+    "src/ui/useWindowRectangle.ts",
+    "src/ui/windowGeometry.ts",
+    "src/ui/windowResizeHandles.css"
   ],
   "adapters": [
     "electron/content/contentConfig.ts",
