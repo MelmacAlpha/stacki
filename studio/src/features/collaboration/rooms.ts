@@ -1,4 +1,5 @@
 import { loadInsertionDefaults } from '../settings/loadDefaults';
+import { assert } from '../../../vendor/stacki/shared/core/assert';
 import { maintainConnection } from './connectionLease';
 import { parseSaveSequence } from './saveProtocol';
 import { selectionRequest } from './selectionIntent';
@@ -12,23 +13,31 @@ import * as Y from 'yjs';
 import { WebSocket, WebSocketServer, type RawData } from 'ws';
 import { PresenceColors } from './presenceColors';
 import { CursorRelay } from './cursorRelay';
+import { sourceRenderMode, type SourceRenderMode } from '../preview/sourceRenderMode';
 import type { CursorPacket } from './cursorPresence';
 import { writeFile, rename } from 'node:fs/promises';
 import { createHash, randomUUID } from 'node:crypto';
 import { MAX_SOURCE, record, sourcePath, string, textChange } from '../../shared/validation';
 import { pasteEdits } from '../source/paste';
-import { applyEdits, parseAction, structuralEdits } from '../source/source';
+import { structuralEdits } from '../source/sourceOperations';
+import { applyEdits, parseAction } from '../source/source';
 import { BatchedWriter } from '../storage/batchedWriter';
 import { DraftStorage } from '../storage/draftStorage';
 import { SerialQueue } from '../../shared/serialQueue';
 import { readSource, preparePath } from '../project/projectServer';
 
 interface LivePresence {
-  readonly written?: (file: string) => void;
+  readonly written?: (file: string, mode: SourceRenderMode) => void;
   readonly publishing?: () => PublishState;
   readonly colors: PresenceColors;
   readonly broadcast: (packet: CursorPacket) => void;
   readonly snapshot: () => readonly CursorPacket[];
+}
+
+interface SourceSnapshot {
+  readonly source: string;
+  readonly bytes: Uint8Array;
+  readonly scheduling: 'classify' | 'immediate';
 }
 
 export class Room {
@@ -41,7 +50,7 @@ export class Room {
   private saved = '';
   private revision = 0;
   private queued = 0;
-  readonly durable: BatchedWriter;
+  readonly durable: BatchedWriter<SourceSnapshot>;
   private readonly storage: DraftStorage;
   constructor(
     readonly root: string,
@@ -59,7 +68,9 @@ export class Room {
       }
     });
     this.storage = new DraftStorage(root);
-    this.durable = new BatchedWriter((bytes) => this.storage.write(this.file, bytes));
+    // Projection and persistence share one bounded writer. Keystrokes must not
+    // queue behind disk I/O or trigger an Astro rebuild for every character.
+    this.durable = new BatchedWriter((snapshot) => this.writeSnapshot(snapshot), 300);
   }
   async initialize() {
     const source = await readSource(this.root, this.file);
@@ -181,15 +192,15 @@ export class Room {
       if (!this.applyUpdate(message, socket)) {
         // A replay can already exist in memory after a failed disk or durable write.
         // CRDT deduplication proves convergence, not persistence.
-        if (await this.writeSource()) {
-          // Other peers missed the edit when the first disk write failed.
+        if (this.text.toString() !== this.saved) {
           this.broadcast({
             type: 'update',
             update: Buffer.from(Y.encodeStateAsUpdate(this.document)).toString('base64'),
             revision: this.revision,
+            writePending: true,
           });
         }
-        this.acknowledgeSave(socket, save);
+        this.acknowledgeSave(socket, save, 'immediate');
         return;
       }
     } else if (message['type'] === 'action') {
@@ -197,7 +208,6 @@ export class Room {
     } else {
       throw new Error('Unknown collaboration message');
     }
-    await this.writeSource();
     this.revision++;
     const update = Buffer.from(Y.encodeStateAsUpdate(this.document, before)).toString('base64');
     for (const client of this.clients.keys()) {
@@ -205,6 +215,7 @@ export class Room {
         type: 'update',
         update,
         revision: this.revision,
+        writePending: true,
         ownAction: client === socket && message['type'] === 'action',
         structural: message['type'] === 'action',
         selection: this.clients.get(client)?.selection ?? '',
@@ -213,11 +224,17 @@ export class Room {
       });
     }
     this.presence();
-    this.acknowledgeSave(socket, save);
+    // Peers consume the accepted CRDT delta immediately. File projection and
+    // durable storage must not sit between a keystroke and another editor.
+    this.acknowledgeSave(socket, save, message['type'] === 'update' ? 'classify' : 'immediate');
   }
-  private acknowledgeSave(socket: WebSocket, save: number | undefined) {
+  private acknowledgeSave(
+    socket: WebSocket,
+    save: number | undefined,
+    scheduling: SourceSnapshot['scheduling'],
+  ) {
     const revision = this.revision;
-    void this.durable.save(Y.encodeStateAsUpdate(this.document)).then(
+    void this.durable.save(this.snapshot(scheduling), scheduling === 'immediate').then(
       () => this.send(socket, { type: 'saved', revision, save }),
       () =>
         this.broadcast({
@@ -423,19 +440,38 @@ export class Room {
     }, origin);
   }
   async persist() {
-    await this.durable.save(Y.encodeStateAsUpdate(this.document), true);
-    await this.writeSource();
+    await this.durable.save(this.snapshot('immediate'), true);
   }
-  private async writeSource() {
-    const source = this.text.toString();
+  private snapshot(scheduling: SourceSnapshot['scheduling']): SourceSnapshot {
+    return {
+      source: this.text.toString(),
+      bytes: Y.encodeStateAsUpdate(this.document),
+      scheduling,
+    };
+  }
+  private async writeSnapshot(snapshot: SourceSnapshot) {
+    assert(snapshot.source.length <= MAX_SOURCE, 'Projected source stays within the source limit');
+    assert(snapshot.bytes.length <= 8_000_000, 'Projected document stays within the draft limit');
+    const changed = await this.writeSource(snapshot.source, snapshot.scheduling);
+    await this.storage.write(this.file, snapshot.bytes);
+    if (changed) {
+      this.broadcast({
+        type: 'source-written',
+        structural: snapshot.scheduling === 'immediate',
+      });
+    }
+  }
+  private async writeSource(source: string, scheduling: SourceSnapshot['scheduling']) {
     if (source === this.saved) {
       return false;
     }
     const absolute = await preparePath(this.root, this.file);
     await writeFile(absolute + '.studio-tmp', source);
     await rename(absolute + '.studio-tmp', absolute);
+    const mode =
+      scheduling === 'classify' ? sourceRenderMode(this.file, this.saved, source) : 'immediate';
     this.saved = source;
-    this.live?.written?.(this.file);
+    this.live?.written?.(this.file, mode);
     return true;
   }
   async setSource(source: string) {
@@ -497,7 +533,7 @@ export function createRooms(root: string) {
   const rooms = new Map<string, Promise<Room>>();
   const readyRooms = new Set<Room>();
   let publishing: PublishState = { kind: 'idle' };
-  const sourceListeners = new Set<(file: string) => void>();
+  const sourceListeners = new Set<(file: string, mode: SourceRenderMode) => void>();
   const live = { ...livePresence(readyRooms, sourceListeners), publishing: () => publishing };
   const broadcast = (message: unknown) => {
     for (const room of readyRooms) {
@@ -529,7 +565,7 @@ export function createRooms(root: string) {
     return pending;
   };
   return {
-    onWrite: (listener: (file: string) => void) => {
+    onWrite: (listener: (file: string, mode: SourceRenderMode) => void) => {
       sourceListeners.add(listener);
       return () => sourceListeners.delete(listener);
     },
@@ -540,6 +576,11 @@ export function createRooms(root: string) {
     hasClients: () => [...readyRooms].some((room) => room.clients.size > 0),
     projectChanged: () => broadcast({ type: 'project-changed' }),
     coordinator,
+    // Call under the coordinator before filesystem snapshots or multi-file writes.
+    // Await actual saves, because flushing a failed batch alone does not retry it.
+    persist: async () => {
+      await Promise.all([...readyRooms].map((room) => room.persist()));
+    },
     sockets,
     get,
     read: async (file: string) => {
@@ -557,12 +598,12 @@ export function createRooms(root: string) {
 }
 function livePresence(
   rooms: ReadonlySet<Room>,
-  sourceListeners: ReadonlySet<(file: string) => void>,
+  sourceListeners: ReadonlySet<(file: string, mode: SourceRenderMode) => void>,
 ): LivePresence {
   return {
-    written: (file) => {
+    written: (file, mode) => {
       for (const listener of sourceListeners) {
-        listener(file);
+        listener(file, mode);
       }
     },
     colors: new PresenceColors(),

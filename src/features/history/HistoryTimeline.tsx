@@ -37,10 +37,10 @@ interface HistoryTimelineProps {
   readonly head: string | undefined;
   readonly userEmail: string | undefined;
   readonly previewRef: string | undefined;
-  readonly onPreviewCommit: (commit: HistoryCommit) => void;
+  readonly onPreviewCommit?: ((commit: HistoryCommit) => void) | undefined;
   readonly onExitPreview: () => void;
-  readonly onRestoreFile: (commit: HistoryCommit, file: HistoryCommitFile) => void;
-  readonly onRestoreProject: (commit: HistoryCommit) => void;
+  readonly onRestoreFile?: ((commit: HistoryCommit, file: HistoryCommitFile) => void) | undefined;
+  readonly onRestoreProject?: ((commit: HistoryCommit) => void) | undefined;
 }
 
 export default function HistoryTimeline(props: HistoryTimelineProps) {
@@ -317,24 +317,30 @@ function CommitBody(props: CommitRowProps) {
         onRestoreFile={props.onRestoreFile}
       />
       <div className="history-commit-actions">
-        <button
-          className={`history-preview-action ${props.previewing ? 'primary' : 'ghost'}`}
-          onClick={() => (props.previewing ? props.onExitPreview() : props.onPreviewCommit(commit))}
-        >
-          <PreviewIcon size={12} />
-          {props.previewing ? 'Back to now' : 'Preview'}
-        </button>
+        {props.onPreviewCommit && (
+          <button
+            className={`history-preview-action ${props.previewing ? 'primary' : 'ghost'}`}
+            onClick={() =>
+              props.previewing ? props.onExitPreview() : props.onPreviewCommit?.(commit)
+            }
+          >
+            <PreviewIcon size={12} />
+            {props.previewing ? 'Back to now' : 'Preview'}
+          </button>
+        )}
         <span className="history-hash">{commit.isMerge ? 'Merge commit' : commit.shortHash}</span>
-        <MoreMenu
-          title="Commit actions"
-          width={230}
-          items={[
-            {
-              label: 'Restore project to this commit…',
-              onSelect: () => props.onRestoreProject(commit),
-            },
-          ]}
-        />
+        {props.onRestoreProject && (
+          <MoreMenu
+            title="Commit actions"
+            width={230}
+            items={[
+              {
+                label: 'Restore project to this commit…',
+                onSelect: () => props.onRestoreProject?.(commit),
+              },
+            ]}
+          />
+        )}
       </div>
     </div>
   );

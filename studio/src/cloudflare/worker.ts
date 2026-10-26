@@ -3,6 +3,7 @@ import { isStudioAPI, studioError } from './apiResponse';
 import { canEdit } from '../features/auth/repositoryAccess';
 import { Container } from '@cloudflare/containers';
 import { githubLogin, loginPage } from '../features/auth/githubLogin';
+import { routeLogin } from '../features/auth/loginRoute';
 import {
   cookie,
   sessionCookie,
@@ -12,14 +13,26 @@ import {
 } from '../features/auth/session';
 import type { Environment } from './environment';
 import { internal } from './internalRoutes';
+import { claimLoginAttempt, LoginAttempts } from '../features/auth/loginAttempts';
+import { warmupRequest } from './warmupRequest';
 
 export class PreviewContainer extends Container<Environment> {
+  private readonly loginAttempts = new LoginAttempts((state, expires) =>
+    this.ctx.storage.transaction((storage) => claimLoginAttempt(storage, state, expires)),
+  );
   override defaultPort = 4350;
   override sleepAfter = '3m';
   // Port probes only need an HTTP response; the protected API rejects this
   // unauthenticated probe cheaply instead of rendering the Astro homepage.
   override pingEndpoint = 'localhost/studio/api/status';
   override async fetch(request: Request): Promise<Response> {
+    // OAuth coordination uses the existing Durable Object without starting the preview Container.
+    const auth = await githubLogin(request, this.env, this.loginAttempts, (profile) =>
+      canEdit(profile, this.env, true),
+    );
+    if (auth) {
+      return auth;
+    }
     if ((await this.getState()).status !== 'healthy') {
       await this.startAndWaitForPorts(4350, { portReadyTimeoutMS: 600_000 });
     }
@@ -78,8 +91,8 @@ async function route(
     return previewEntry(url, environment);
   }
   if (!previewHost) {
-    const auth = await githubLogin(request, environment, (profile) =>
-      canEdit(profile, environment, true),
+    const auth = routeLogin(request, (forwarded) =>
+      environment.PREVIEW.getByName('project').fetch(forwarded),
     );
     if (auth) {
       return auth;
@@ -137,21 +150,13 @@ function warmPreview(
   identity: Identity,
   context: ExecutionContext,
 ) {
-  if (
-    request.method !== 'GET' ||
-    !['/studio', '/studio/'].includes(new URL(request.url).pathname)
-  ) {
+  const warmup = warmupRequest(request, environment.PREVIEW_ORIGIN);
+  if (!warmup) {
     return;
   }
-  // Start restoration and compile the homepage while the browser downloads
-  // the editor, instead of waiting for React's first API/iframe request.
+  // Restore the workspace while the editor loads; only visible previews render.
   context.waitUntil(
-    proxy(
-      new Request(new URL('/', environment.PREVIEW_ORIGIN), request),
-      environment,
-      identity,
-      false,
-    )
+    proxy(warmup, environment, identity, false)
       .then((response) => response.body?.cancel())
       .catch(() => {}),
   );

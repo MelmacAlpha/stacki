@@ -2,12 +2,8 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { actionSelection } from '../src/features/navigator/actionSelection';
 import { dropTarget } from '../src/features/navigator/dropTarget';
-import {
-  applyEdits,
-  nodesOf,
-  structuralEdits,
-  type TreeAction,
-} from '../src/features/source/source';
+import { structuralEdits } from '../src/features/source/sourceOperations';
+import { applyEdits, nodesOf, type TreeAction } from '../src/features/source/source';
 
 function selection(source: string, action: TreeAction) {
   const edits = structuralEdits(source, action, 'src/pages/index.astro');

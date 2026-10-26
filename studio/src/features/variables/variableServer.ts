@@ -5,6 +5,7 @@ import { walk } from '../project/projectServer';
 import { record, string } from '../../shared/validation';
 import { applyVariableOperation } from './variableOperations';
 import { VARIABLE_ROOT, withVariableWorkspace } from './variableWorkspace';
+import { batchedRead } from '../../shared/batchedRead';
 
 type Rooms = ReturnType<typeof createRooms>;
 export function variableRoutes(root: string, rooms: Rooms) {
@@ -43,17 +44,16 @@ async function variableSources(root: string, rooms: Rooms) {
   if (paths.length > 1000) {
     throw new Error('Variable scan exceeds 1,000 source files');
   }
-  const sources = new Map<string, string>();
   let total = 0;
-  for (const file of paths) {
+  const entries = await batchedRead(paths, async (file) => {
     const text = await rooms.read(file);
     total += Buffer.byteLength(text);
     if (total > 32_000_000) {
       throw new Error('Variable scan exceeds 32 MB');
     }
-    sources.set(file, text);
-  }
-  return sources;
+    return [file, text] as const;
+  });
+  return new Map(entries);
 }
 async function editVariables(
   rooms: Rooms,

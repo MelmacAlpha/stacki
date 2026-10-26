@@ -1,6 +1,11 @@
 import type { PreloadBridge } from '../../shared/ipc/preloadApi';
 // Native capabilities stay behind this boundary; Studio supplies its HTTP adapter.
 import { parseIpcPayload } from '../../shared/ipc/ipcPayloads';
+export const historyTransport = {
+  log: (payload: Parameters<PreloadBridge['gitLog']>[0]) => window.avb.gitLog(payload),
+  diff: (payload: Parameters<PreloadBridge['gitCommitDiff']>[0]) =>
+    window.avb.gitCommitDiff(payload),
+};
 export { onFilesChanged as onPropertyFilesChanged } from '../ipc/appBridge';
 export const cmsTransport = {
   writeContentEntry: (

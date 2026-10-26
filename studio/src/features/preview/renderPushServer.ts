@@ -3,6 +3,7 @@ import type { ViteDevServer, WebSocketClient } from 'vite';
 import type { IncomingMessage } from 'node:http';
 import { maintainConnection, reauthorizeConnection } from '../collaboration/connectionLease';
 import { RenderPush, type RenderTarget } from './renderPush';
+import { renderScope } from './renderRequest';
 
 export function renderPath(input: unknown): string | undefined {
   if (!input || typeof input !== 'object' || !('path' in input)) {
@@ -27,6 +28,13 @@ export function renderPath(input: unknown): string | undefined {
 }
 
 export function configureRenderPush(server: ViteDevServer, port: number, root: string) {
+  server.middlewares.use((request, _response, next) => {
+    if (request.headers['x-studio-render'] === 'patch') {
+      renderScope.run('patch', next);
+    } else {
+      next();
+    }
+  });
   const push = new RenderPush((path) => renderPage(port, path));
   const targets = new Map<WebSocketClient, RenderTarget>();
   const authorized = previewConnections(server);
@@ -65,9 +73,12 @@ export function configureRenderPush(server: ViteDevServer, port: number, root: s
     push.subscribe(path, target);
   });
   server.httpServer?.once('close', () => push.close());
-  return () => {
-    invalidateVariants();
-    push.invalidate();
+  return {
+    sourceWritten: push.sourceWritten.bind(push),
+    invalidate: () => {
+      invalidateVariants();
+      push.invalidate();
+    },
   };
 }
 
@@ -98,7 +109,7 @@ async function renderPage(
   // Keep Astro compilation inside the container; the browser receives the result
   // on its existing authenticated preview socket instead of another WAN request.
   const response = await fetch(`http://127.0.0.1:${port}${path}`, {
-    headers: headers ?? {},
+    headers: { ...headers, 'x-studio-render': 'patch' },
     redirect: 'error',
     signal: AbortSignal.timeout(15_000),
   });
@@ -120,7 +131,7 @@ async function renderPage(
       break;
     }
     size += value.byteLength;
-    if (size > 16_000_000) {
+    if (size > 4_000_000) {
       await reader.cancel();
       throw new Error('Preview render limit exceeded');
     }

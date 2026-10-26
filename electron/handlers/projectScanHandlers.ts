@@ -8,8 +8,8 @@ import { isAtomicTemporary } from '../documents/atomicWrite';
 import { assert } from '../../shared/core/assert';
 import * as path from 'path';
 import * as fs from 'fs';
-import { aliasMap } from '../content/cmsRefs';
-import { instancesIn } from '../properties/componentUsage';
+import { aliasMap, type Alias } from '../content/cmsRefs';
+import { instanceCounts, instancesIn } from '../properties/componentUsage';
 import { toPosix, capture } from '../lib/mainHelpers';
 import { listAstroFiles, routeForPage } from '../project/projectFiles';
 import { scanPageTitles } from '../properties/pageTitles';
@@ -75,13 +75,10 @@ function registerProjectScanHandler({
 
     // Instance counts: how often each component is used across every .astro
     // file in src (pages, layouts, and other components).
-    const allSources = listAstroFiles(sourceDirectory).map((file) => {
-      try {
-        return { file, text: readSource(file) };
-      } catch {
-        return { file, text: '' };
-      }
-    });
+    const importAliases = aliasMap(projectPath);
+    const allSources = listAstroFiles(sourceDirectory).map((file) =>
+      scanCountSource(file, importAliases),
+    );
     // Layouts are counted too: they show up in the palette alongside
     // components, so the instance line has to mean the same thing for both.
     // Counted by the same function the "where is it used" list counts with —
@@ -89,10 +86,9 @@ function registerProjectScanHandler({
     // That function counts under the name each FILE imports it as: a layout
     // imported as `Layout` is never written `<BaseLayout>`, and counting the
     // filename found none of them.
-    const importAliases = aliasMap(projectPath);
     for (const comp of [...components, ...layouts]) {
       comp.instances = allSources.reduce(
-        (count, { file, text }) =>
+        (count, { file, text, counts }) =>
           count +
           (sameFilesystemPath(file, comp.path)
             ? 0 // a file is not one of its own users
@@ -100,7 +96,7 @@ function registerProjectScanHandler({
                 file,
                 targetPath: comp.path,
                 name: comp.name,
-                aliases: importAliases,
+                counts,
               })),
         0,
       );
@@ -114,6 +110,16 @@ function registerProjectScanHandler({
       trailingSlash: readTrailingSlash(projectPath),
     };
   });
+}
+
+function scanCountSource(file: string, aliases: readonly Alias[]) {
+  let text = '';
+  try {
+    text = readSource(file);
+  } catch {
+    // Unreadable files contribute no instances, matching the source scan above.
+  }
+  return { file, text, counts: instanceCounts(text, file, aliases) };
 }
 
 function scanComponentOrigin(root: string, file: string) {

@@ -1,3 +1,4 @@
+export { historyTransport } from '../../../../src/features/history/historyTransport';
 import { readVariables as readHostedVariables } from '../../../../src/features/variables/variableTransport';
 export { editVariables } from '../../../../src/features/variables/variableTransport';
 export const readVariables = (_project: string) => readHostedVariables();

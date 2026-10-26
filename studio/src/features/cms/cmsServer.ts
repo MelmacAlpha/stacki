@@ -44,8 +44,9 @@ export function cmsRoutes(root: string, rooms: ReturnType<typeof createRooms>) {
     ) {
       throw new Error('Unknown CMS operation');
     }
-    const result = await rooms.coordinator.run(async () => {
-      const snapshot = await cmsSources(root, rooms);
+    // Only capture needs a consistent project revision. Inspecting an immutable
+    // staging directory must not queue edits and heartbeat replies behind CMS reads.
+    const run = async (snapshot: Awaited<ReturnType<typeof cmsSources>>) => {
       return withCmsSnapshot(root, snapshot, async (stage) => {
         const payload =
           typeof input['payload'] === 'string'
@@ -72,7 +73,10 @@ export function cmsRoutes(root: string, rooms: ReturnType<typeof createRooms>) {
         await commitCms(root, rooms, snapshot.sources, next, record(input['versions']));
         return { value, versions: cmsVersions(next) };
       });
-    });
+    };
+    const result = mutations.has(operation)
+      ? await rooms.coordinator.run(async () => run(await cmsSources(root, rooms)))
+      : await run(await rooms.coordinator.run(() => cmsSources(root, rooms)));
     response.setHeader('Content-Type', 'application/json');
     response.end(JSON.stringify(result));
     return true;

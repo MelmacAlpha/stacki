@@ -9,22 +9,7 @@ import { LIMITS } from '../../shared/core/limits';
 import type { ParserNode } from './astroParserTypes';
 import { findMatchingBrace } from './astroLexical';
 
-export const VOID_ELEMENTS = new Set([
-  'area',
-  'base',
-  'br',
-  'col',
-  'embed',
-  'hr',
-  'img',
-  'input',
-  'link',
-  'meta',
-  'param',
-  'source',
-  'track',
-  'wbr',
-]);
+export { HTML_VOID_TAGS as VOID_ELEMENTS } from '../../shared/page/htmlTags';
 export const RAW_ELEMENTS = new Set(['style', 'script']);
 
 // Node ids are structural paths — `n0`, `n0.2`, `n0.2.1` — assigned in one

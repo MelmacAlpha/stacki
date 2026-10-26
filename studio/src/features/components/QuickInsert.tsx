@@ -9,7 +9,7 @@ import type { useEditor } from '../project/useEditor';
 import type { Project } from '../project/projectClient';
 import { parsePage, type TreeAction } from '../source/source';
 import { componentImport } from '../source/imports';
-import { parseInsertContent } from '../source/insertContent';
+import { parseInsertContent } from '../source/insertContentContract';
 import { dropTarget } from '../navigator/dropTarget';
 
 export function QuickInsert({

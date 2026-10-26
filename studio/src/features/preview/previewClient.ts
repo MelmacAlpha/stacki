@@ -25,9 +25,6 @@ const studioOrigin =
 const post = (message: unknown) => window.parent.postMessage(message, studioOrigin);
 const cursorPresence = installCursorPresence(post);
 const columnGuide = startGuide(post);
-// This async module is appended after page markup. Reveal that markup without
-// waiting for slow images or the separate morph module to finish loading.
-requestAnimationFrame(() => post({ type: 'studio:preview-ready' }));
 // Recreating a Vite hot context clears its earlier event listeners.
 const hot = createHotContext('/studio/preview.js');
 const variants = receiveRenderPush(hot);
@@ -273,7 +270,9 @@ document.addEventListener('avb:morphed', (event) => {
     event instanceof CustomEvent && event.detail instanceof Document ? event.detail : undefined,
   );
   resetFocusCache();
-  applyLiveText();
+  applyLiveText(
+    event instanceof CustomEvent && event.detail instanceof Document ? event.detail : undefined,
+  );
   draw();
 });
 window.addEventListener('resize', draw);
@@ -290,6 +289,10 @@ function observePageHeight(): void {
 }
 observePageHeight();
 document.addEventListener('avb:morphed', observePageHeight);
+// Readiness means the markup and preview client are initialized, not painted.
+// Chrome pauses animation frames in hidden cross-origin iframes. Waiting for one
+// before revealing this frame would deadlock the cloud canvas behind its loader.
+post({ type: 'studio:preview-ready' });
 
 function occurrenceAt(id: string, x: number, y: number): number {
   const places = taggedPlaces(scope + id);

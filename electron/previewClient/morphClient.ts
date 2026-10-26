@@ -61,19 +61,22 @@ if (host === 'browser') {
   stripPreviewInstrumentation(document);
 }
 
-function fetchDocument(initialHTML?: string): Promise<FetchedDocument> {
+function fetchDocument(initialHTML?: string, signal?: AbortSignal): Promise<FetchedDocument> {
   const rendering =
     initialHTML === undefined
-      ? fetch(location.href, { cache: 'no-store' }).then((response) => {
-          // Studio edits authored 404 pages too. Reject transport/server failures,
-          // but retain Astro's intentional 404 status for an HTML page rendering.
-          const html404 =
-            response.status === 404 && response.headers.get('content-type')?.includes('text/html');
-          if (!response.ok && !html404) {
-            throw new Error('dev server answered ' + response.status);
-          }
-          return response.text();
-        })
+      ? fetch(location.href, { cache: 'no-store', ...(signal ? { signal } : {}) }).then(
+          (response) => {
+            // Studio edits authored 404 pages too. Reject transport/server failures,
+            // but retain Astro's intentional 404 status for an HTML page rendering.
+            const html404 =
+              response.status === 404 &&
+              response.headers.get('content-type')?.includes('text/html');
+            if (!response.ok && !html404) {
+              throw new Error('dev server answered ' + response.status);
+            }
+            return response.text();
+          },
+        )
       : Promise.resolve(initialHTML);
   return rendering.then((html) => {
     const withAnchors = new DOMParser().parseFromString(html, 'text/html');
@@ -138,11 +141,19 @@ let again = false;
 let pushedHTML: string | undefined;
 let pushReady = false;
 let fallbackTimer: ReturnType<typeof setTimeout> | undefined;
+let activePull: AbortController | undefined;
+let renderDeadline: number | undefined;
+
+function clearFallback(): void {
+  clearTimeout(fallbackTimer);
+  fallbackTimer = undefined;
+  renderDeadline = undefined;
+}
 
 // The hosted preview receives Astro renders on its existing socket. Keep the
 // pull path for old servers, disconnected sockets and failed pushed renders.
-function requestUpdate(priority: 'push-first' | 'immediate' = 'push-first'): void {
-  if (priority === 'immediate' || !pushReady) {
+function requestUpdate(): void {
+  if (!pushReady) {
     clearTimeout(fallbackTimer);
     fallbackTimer = undefined;
     void update();
@@ -155,6 +166,24 @@ function requestUpdate(priority: 'push-first' | 'immediate' = 'push-first'): voi
 }
 document.addEventListener('studio:render-push', (event) => {
   pushReady = event instanceof CustomEvent && event.detail === true;
+  if (!pushReady && fallbackTimer !== undefined) {
+    clearFallback();
+    void update();
+  }
+});
+document.addEventListener('studio:render-pending', () => {
+  if (!pushReady || renderDeadline !== undefined) {
+    return;
+  }
+  // Only an acknowledged server render earns this grace period. Its fetch has a
+  // 15-second deadline; leave room for delivery without multiplying SSR work for
+  // every collaborator. Repeated pending events cannot extend the watchdog.
+  renderDeadline = performance.now() + 20_000;
+  clearTimeout(fallbackTimer);
+  fallbackTimer = setTimeout(() => {
+    clearFallback();
+    void update();
+  }, 20_000);
 });
 document.addEventListener('studio:render-html', (event) => {
   if (
@@ -164,14 +193,15 @@ document.addEventListener('studio:render-html', (event) => {
   ) {
     return;
   }
-  clearTimeout(fallbackTimer);
-  fallbackTimer = undefined;
+  clearFallback();
   pushedHTML = event.detail;
+  // A structural edit can start a WAN refresh before its socket render arrives.
+  // Cancel that redundant pull so completed HTML never waits behind the network.
+  activePull?.abort();
   void update();
 });
 document.addEventListener('studio:render-fallback', () => {
-  clearTimeout(fallbackTimer);
-  fallbackTimer = undefined;
+  clearFallback();
   void update();
 });
 document.dispatchEvent(new window.Event('studio:render-listening'));
@@ -185,6 +215,7 @@ async function update(): Promise<void> {
     return;
   }
   busy = true;
+  let pull: AbortController | undefined;
   try {
     await ready;
     if (!previousDocument) {
@@ -196,7 +227,9 @@ async function update(): Promise<void> {
       again = false;
     }
     const renderingURL = location.href;
-    const next = await fetchDocument(html);
+    pull = html === undefined ? new AbortController() : undefined;
+    activePull = pull;
+    const next = await fetchDocument(html, pull?.signal);
     // A newer push arrived while a fallback fetch was in flight.
     if (pushedHTML === undefined && location.href === renderingURL) {
       applyRendering(next);
@@ -204,15 +237,22 @@ async function update(): Promise<void> {
       again = true;
     }
   } catch (error: unknown) {
-    // Whatever went wrong, the page must still end up showing what the file
-    // says. Falling back to the reload this replaced is always safe.
-    // The original called console.warn, which no browser implements — the
-    // throw it caused skipped the reload line below, which is the whole point
-    // of the catch. Log and reload.
-    console.error('[stacki] could not patch the page, reloading:', error);
-    reloadFor(error instanceof OverCap ? error.reason : 'patch-failed');
-    return;
+    if (pull?.signal.aborted) {
+      // Our own cancellation is supersession, not a failed preview. The next
+      // pass consumes the newest push or fetches the newly selected route.
+      again = true;
+    } else {
+      // Whatever went wrong, the page must still end up showing what the file
+      // says. Falling back to the reload this replaced is always safe.
+      // The original called console.warn, which no browser implements — the
+      // throw it caused skipped the reload line below, which is the whole point
+      // of the catch. Log and reload.
+      console.error('[stacki] could not patch the page, reloading:', error);
+      reloadFor(error instanceof OverCap ? error.reason : 'patch-failed');
+      return;
+    }
   } finally {
+    activePull = undefined;
     busy = false;
   }
   if (again) {
@@ -295,6 +335,8 @@ window.addEventListener('message', (event: MessageEvent) => {
       // Reset queued renders before changing subscriptions so an old response cannot
       // repaint the previous mode after the source has changed.
       pushedHTML = undefined;
+      clearFallback();
+      activePull?.abort();
       history.replaceState(history.state, '', route);
       document.dispatchEvent(new Event('avb:preview-route'));
       void update();
@@ -307,9 +349,8 @@ window.addEventListener('message', (event: MessageEvent) => {
     'type' in data &&
     data['type'] === 'avb:patch-now'
   ) {
-    // update() reports its own failures and reloads; nothing is left to catch.
-    const immediate =
-      event.source === window.parent && 'immediate' in data && data.immediate === true;
-    requestUpdate(immediate ? 'immediate' : 'push-first');
+    // A connected Studio already renders accepted writes. Starting a second
+    // render here competes for container CPU; Desktop still pulls immediately.
+    requestUpdate();
   }
 });

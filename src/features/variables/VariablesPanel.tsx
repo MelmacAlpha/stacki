@@ -1,14 +1,14 @@
-import { ErrorToast } from '../../ui/ErrorToast';
-import React, { useEffect, useRef, useState } from 'react';
+import { PanelReadStatus } from '../../ui/PanelReadStatus';
+import { createPanelCache, usePanelData } from '../../lib/usePanelData';
+import { readCSSVariables } from './variablesBridge';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { onVariablesChanged } from '../../ipc/editorEnvironment';
-import type { Result } from '../../../shared/core/result';
 import type {
   VariableFile,
   VariableGroup,
   VariableSelection,
   VariablesSnapshot,
 } from './variablesBridge';
-import { readCSSVariables } from './variablesBridge';
 import { ChevronLeftIcon, ChevronRightIcon, VariableIcon, FileIcon } from '../../ui/Icons';
 
 export interface VariablesPanelProps {
@@ -17,8 +17,8 @@ export interface VariablesPanelProps {
   readonly onSelect: (selection: VariableSelection | undefined) => void;
 }
 
+const variableCache = createPanelCache<VariablesSnapshot>();
 const EMPTY_FILES: readonly VariableFile[] = [];
-
 // Files preserve the author's stylesheet boundaries; groups preserve the rules inside them.
 export default function VariablesPanel(props: VariablesPanelProps) {
   // Project navigation starts with fresh file and default-selection state.
@@ -27,9 +27,7 @@ export default function VariablesPanel(props: VariablesPanelProps) {
 
 function VariableFilesPanel(props: VariablesPanelProps) {
   const { selected, onSelect, project } = props;
-  const result = useVariableFiles(project.path);
-  const files = result.ok ? result.value.files : EMPTY_FILES;
-  const error = result.ok ? undefined : result.error;
+  const { state, refresh, files } = useVariableFiles(project.path);
   const [openFile, setOpenFile] = useState<string | undefined>(undefined);
   useDefaultVariableSelection(files, selected, onSelect);
   useEffect(() => {
@@ -84,8 +82,8 @@ function VariableFilesPanel(props: VariablesPanelProps) {
               onSelect={onSelect}
             />
           ))}
-        {error && <ErrorToast message={error} />}
-        {!files.length && !error && (
+        <PanelReadStatus state={state} label="CSS variables" retry={refresh} />
+        {state.kind === 'ready' && files.length === 0 && (
           <div className="props-empty">
             No CSS custom properties found in this project&rsquo;s stylesheets.
           </div>
@@ -93,6 +91,16 @@ function VariableFilesPanel(props: VariablesPanelProps) {
       </div>
     </div>
   );
+}
+
+function useVariableFiles(projectPath: string) {
+  const read = useCallback(() => readCSSVariables(projectPath), [projectPath]);
+  const { state, refresh } = usePanelData(variableCache, projectPath, read, onVariablesChanged);
+  const files =
+    state.kind === 'ready'
+      ? state.value.files.filter((file) => file.error || (file.count ?? 0) > 0)
+      : EMPTY_FILES;
+  return { state, refresh, files };
 }
 
 function useDefaultVariableSelection(
@@ -120,61 +128,6 @@ function useDefaultVariableSelection(
       }
     }
   }, [files, selected, onSelect]);
-}
-
-function useVariableFiles(projectPath: string) {
-  const [result, setResult] = useState<Result<VariablesSnapshot, string>>({
-    ok: true,
-    value: { files: [], values: {} },
-  });
-  useEffect(() => {
-    // One request plus one pending refresh bounds watcher bursts. Each callback
-    // finishes before a queued read starts; obsolete project responses are ignored.
-    let live = true;
-    let running = false;
-    let pending = false;
-    // It calls itself again only from the read's callback, never on the stack.
-    // eslint-disable-next-line stacki/bounded-recursion -- Event re-entry from a promise callback.
-    const refresh = () => {
-      if (!live) {
-        return;
-      }
-      if (running) {
-        pending = true;
-        return;
-      }
-      running = true;
-      void readCSSVariables(projectPath).then((next) => {
-        running = false;
-        if (!live) {
-          return;
-        }
-        // Keep read errors visible, but omit stylesheets with no editable variables.
-        setResult(
-          next.ok
-            ? {
-                ok: true,
-                value: {
-                  ...next.value,
-                  files: next.value.files.filter((file) => file.error || (file.count ?? 0) > 0),
-                },
-              }
-            : next,
-        );
-        if (pending) {
-          pending = false;
-          refresh();
-        }
-      });
-    };
-    refresh();
-    const unsubscribe = onVariablesChanged(refresh);
-    return () => {
-      live = false;
-      unsubscribe();
-    };
-  }, [projectPath]);
-  return result;
 }
 
 interface FileRowProps {

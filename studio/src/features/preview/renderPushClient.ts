@@ -30,6 +30,12 @@ export function receiveRenderPush(hot: PreviewHot) {
       announce();
     }
   });
+  hot.on('studio:render-pending', (data) => {
+    if (matchesPage(data, path)) {
+      renderRevision++;
+      document.dispatchEvent(new Event('studio:render-pending'));
+    }
+  });
   hot.on('studio:render', (data) => {
     if (matchesPage(data, path)) {
       const revision = ++renderRevision;

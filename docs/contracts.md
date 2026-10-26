@@ -848,3 +848,50 @@ disk capacity, checks out the witnessed revision and removes temporary Git objec
 
 The Worker and container must be deployed together for the new internal protocol. Existing
 container instance sizes are preserved by updates; the supplied template now selects standard-2.
+
+
+## Studio Git history
+
+Studio uses the shared Desktop history graph, commit-file classification and diff viewer.
+The authenticated `/studio/api/history/log` and `/studio/api/history/diff` routes read a
+private Git object store without changing the collaborative checkout. History reads have
+their own bounded queue, retain at most 300 commits per view and 64 branch references, and
+reuse each fetched snapshot for one minute. Credentials use the existing repository-scoped
+container grant and remain in child-process environment variables. They never reach the
+browser or Git configuration. Diff requests use the shared commit/path parser, require a
+commit reachable from fetched branches, and retain the Desktop diff size limits.
+
+The shared viewer only offers restore and preview actions when its host supplies them.
+Studio's published-history view currently provides graph and diff inspection; it does not
+expose Desktop checkout/restore operations against a shared collaborative draft. Session
+Undo/Redo remains available independently.
+
+CMS read operations capture their source snapshot under the project mutation coordinator,
+then release it before staging files and executing schema inspection. This keeps a slow
+content config from blocking collaborative saves and heartbeat replies. CMS mutations keep
+the existing coordinated, witnessed transaction.
+
+Studio broadcasts validated collaborative `update` messages before projecting the source to disk.
+`writePending: true` lets peers apply the CRDT delta and mapped text immediately without requesting
+a render of the old file. The subsequent `source-written` message starts source-dependent refreshes
+only after the atomic file replacement. `saved` remains a separate acknowledgment after durable
+storage succeeds. Failed writes retain the accepted draft in memory and use the existing replay
+recovery; delivery alone never acknowledges persistence.
+
+Accepted updates leave the project mutation queue before disk I/O. A bounded writer coalesces
+source and CRDT snapshots over 300 ms, preserving their order and acknowledging each edit only
+after a snapshot containing it reaches both stores. Structural actions request an immediate flush.
+Publishing, repository synchronization and multi-file transactions persist accepted room state
+under the project coordinator before reading filesystem snapshots, so batching cannot omit an
+accepted edit from a publish or rollback. Unchanged synchronization emits no edit or render notice.
+
+Studio's Vite watcher ignores its reserved `.studio-tmp` staging files. Only the completed
+atomic replacement reaches Astro's source watcher; staging creation/removal must not rebuild
+routes, invalidate CSS modules or refresh project catalogs. Project-provided ignore rules remain
+in force, and ordinary edits plus route creation/removal still reach the watcher.
+
+Literal Astro text edits share the same source-range check as immediate canvas text updates.
+Their authoritative renders wait for 300 ms of quiet, capped at two seconds during continuous
+typing, so full-site execution does not compete with every keystroke. Structural actions and
+other source changes cancel that delay. Queued renders announce their pending state to all
+subscribers so clients do not start duplicate fallback requests during the typing window.

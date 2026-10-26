@@ -50,11 +50,7 @@ export function configureVariants(
       request,
       render,
       renderVariant,
-      (value, html) => {
-        if (current() && client.socket.bufferedAmount < 8_000_000) {
-          sendVariant(client, request, value, html);
-        }
-      },
+      (value, html) => sendVariant(client, request, value, html, current),
       current,
       () => job.priority,
     )
@@ -78,16 +74,21 @@ export function configureVariants(
   };
 }
 
-function sendVariant(
+async function sendVariant(
   client: WebSocketClient,
   request: VariantRequest,
   value: string | number | null | undefined,
   html: string,
+  current: () => boolean,
 ) {
+  const encoded = request.gzip ? await encodeRenderedHTML(html) : { html };
+  if (!current() || client.socket.bufferedAmount >= 8_000_000) {
+    return;
+  }
   client.send('studio:variant-render', {
     request: request.request,
     value,
-    ...(request.gzip ? encodeRenderedHTML(html) : { html }),
+    ...encoded,
   });
 }
 
@@ -96,7 +97,7 @@ async function prepareVariants(
   request: VariantRequest,
   render: (path: string) => Promise<string>,
   renderVariant: (request: VariantRequest, value: string | number | null) => Promise<string>,
-  send: (value: string | number | null | undefined, html: string) => void,
+  send: (value: string | number | null | undefined, html: string) => Promise<void>,
   current: () => boolean,
   priority: () => string | number | null | undefined,
 ) {
@@ -137,7 +138,7 @@ async function prepareVariants(
       throw new Error('Variant cache limit exceeded');
     }
     if (current()) {
-      send(value, html);
+      await send(value, html);
     }
   }
 }

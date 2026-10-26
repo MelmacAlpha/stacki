@@ -104,3 +104,36 @@ test('visible file and content collections suppress the empty state', async () =
     }
   }
 });
+
+test('CMS reopens from cache and reports refresh failures', async () => {
+  const root = await mountPanel([{ ...hiddenCollection, dir: 'data', rel: 'data/posts.json' }]);
+  await act(async () => root.render(undefined));
+  let rejectRead;
+  window.avb.listCms = () =>
+    new Promise((resolve, reject) => {
+      rejectRead = reject;
+    });
+  await act(async () =>
+    root.render(
+      React.createElement(CmsPanel, {
+        project: { path: '/project' },
+        currentFile: 'pages/index.astro',
+        refreshKey: 0,
+        onSelect() {},
+        onSelectContent() {},
+        onOpenSettings() {},
+        showToast() {},
+      }),
+    ),
+  );
+  assert.ok(
+    document.querySelector('.cms-collection'),
+    'Previous collections render before the read',
+  );
+  assert.doesNotMatch(document.body.textContent, /Loading collections|No collections to show/);
+  await act(async () => rejectRead(new Error('CMS unavailable')));
+  assert.match(document.body.textContent, /CMS unavailable/);
+  assert.doesNotMatch(document.body.textContent, /No collections to show/);
+  assert.equal(document.querySelector('[role="alert"] button').textContent, 'Retry');
+  await act(async () => root.unmount());
+});

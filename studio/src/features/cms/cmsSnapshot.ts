@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { walk, safePath } from '../project/projectServer';
 import type { createRooms } from '../collaboration/rooms';
+import { batchedRead } from '../../shared/batchedRead';
 import { sourcePath, string } from '../../shared/validation';
 import { stopServiceAndWait } from '../../../vendor/stacki/electron/content/contentConfig';
 
@@ -13,20 +14,22 @@ export async function cmsSources(root: string, rooms?: ReturnType<typeof createR
   if (paths.length > 2000) {
     throw new Error('CMS scan exceeds 2,000 files');
   }
-  const sources = new Map<string, string>();
   let size = 0;
-  for (const file of paths.filter((file) => CMS_SOURCE.test(file))) {
-    sourcePath(file);
-    const source = rooms
-      ? await rooms.read(file)
-      : string(await readFile(await safePath(root, file), 'utf8'));
-    size += Buffer.byteLength(source);
-    if (size > 32_000_000) {
-      throw new Error('CMS scan exceeds 32 MB');
-    }
-    sources.set(file, source);
-  }
-  return { sources, paths };
+  const entries = await batchedRead(
+    paths.filter((file) => CMS_SOURCE.test(file)),
+    async (file) => {
+      sourcePath(file);
+      const source = rooms
+        ? await rooms.read(file)
+        : string(await readFile(await safePath(root, file), 'utf8'));
+      size += Buffer.byteLength(source);
+      if (size > 32_000_000) {
+        throw new Error('CMS scan exceeds 32 MB');
+      }
+      return [file, source] as const;
+    },
+  );
+  return { sources: new Map(entries), paths };
 }
 export async function withCmsSnapshot<T>(
   root: string,
@@ -59,9 +62,9 @@ async function stageSources(
     }
   }
   // Asset placeholders allow import resolution without copying binary uploads.
-  for (const file of snapshot.paths) {
+  await batchedRead(snapshot.paths, async (file) => {
     const destination = await safePath(stage, file);
     await mkdir(path.dirname(destination), { recursive: true });
     await writeFile(destination, snapshot.sources.get(file) ?? '');
-  }
+  });
 }

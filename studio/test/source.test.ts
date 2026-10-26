@@ -3,6 +3,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
+import { structuralEdits } from '../src/features/source/sourceOperations';
 import {
   applyEdits,
   nodeId,
@@ -10,7 +11,6 @@ import {
   contentEdit,
   flatten,
   nodesOf,
-  structuralEdits,
   parsePage,
 } from '../src/features/source/source';
 import { filePath, sourcePath } from '../src/shared/validation';

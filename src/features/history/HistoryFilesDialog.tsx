@@ -17,7 +17,7 @@ interface HistoryFilesDialogProps {
   readonly projectPath: string;
   readonly files: readonly HistoryCommitFile[];
   readonly onClose: () => void;
-  readonly onRestoreFile: (commit: HistoryCommit, file: HistoryCommitFile) => void;
+  readonly onRestoreFile?: ((commit: HistoryCommit, file: HistoryCommitFile) => void) | undefined;
 }
 
 export default function HistoryFilesDialog(props: HistoryFilesDialogProps) {
@@ -63,11 +63,14 @@ export default function HistoryFilesDialog(props: HistoryFilesDialogProps) {
             files={visible}
             selected={selected}
             select={setSelected}
-            onRestoreFile={(commit, file) =>
-              finish(() => {
-                props.onClose();
-                props.onRestoreFile(commit, file);
-              })
+            onRestoreFile={
+              props.onRestoreFile
+                ? (commit, file) =>
+                    finish(() => {
+                      props.onClose();
+                      props.onRestoreFile?.(commit, file);
+                    })
+                : undefined
             }
           />
         </>
@@ -92,9 +95,13 @@ function HistoryFilesContent({
         commit={props.commit}
         file={selected}
         onBack={() => select(undefined)}
-        onRestore={() => {
-          props.onRestoreFile(props.commit, selected);
-        }}
+        onRestore={
+          props.onRestoreFile
+            ? () => {
+                props.onRestoreFile?.(props.commit, selected);
+              }
+            : undefined
+        }
       />
     );
   }

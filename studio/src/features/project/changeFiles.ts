@@ -14,6 +14,7 @@ export async function changeFiles(
   rooms: ReturnType<typeof createRooms>,
   changes: readonly FileChange[],
 ) {
+  await rooms.persist();
   const previous = await Promise.all(
     changes.map(async ({ file }) => {
       try {

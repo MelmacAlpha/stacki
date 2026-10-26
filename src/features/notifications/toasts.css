@@ -180,7 +180,7 @@
   display: inline-block;
   margin: 6px 8px 0 0;
   color: inherit;
-  text-decoration: underline;
+  text-decoration: none;
   cursor: pointer;
 }
 .toast-message {

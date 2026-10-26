@@ -1,3 +1,5 @@
+import { createPanelCache, usePanelData, type PanelData } from '../../lib/usePanelData';
+import { PanelReadStatus } from '../../ui/PanelReadStatus';
 import { SelectableAssetTile } from './AssetSelection';
 import { AssetBatchTools, useAssetBatch, convertible, type AssetBatch } from './AssetBatchTools';
 import { assetDropLimit, assetDeletionMessage } from '../../ipc/editorEnvironment';
@@ -58,6 +60,8 @@ interface AssetsPanelProps {
 }
 
 interface AssetPanelState {
+  readonly listing: PanelData<unknown>;
+  readonly refresh: () => Promise<void>;
   readonly batch: AssetBatch;
   readonly entries: readonly AssetPanelEntry[];
   readonly missing: boolean;
@@ -85,19 +89,22 @@ function ProjectAssets(props: AssetsPanelProps) {
 
 function useAssetPanelState(props: AssetsPanelProps): AssetPanelState {
   const batch = useAssetBatch(props.project.path, props.showToast);
-  const [entries, setEntries] = useState<readonly AssetPanelEntry[]>([]);
-  const [missing, setMissing] = useState(false);
+
   // The first listing falls back to the root if the project's asset folder is absent.
-  const [cwd, setCwd] = useState(PICK_HOME);
+  const [cwd, setCwd] = useState(() => initialAssetDirectory(props.project.path));
   const [renaming, setRenaming] = useState<string | undefined>(undefined);
   const [newFolder, setNewFolder] = useState(false);
   const [dragTarget, setDragTarget] = useState<string | undefined>(undefined);
   const cwdRef = useRef(cwd);
   cwdRef.current = cwd;
-  useAssetListing(props.project.path, props.showToast, cwdRef, setEntries, setMissing, setCwd);
+  const { state: listing, refresh } = useAssetListing(props.project.path, cwdRef, setCwd);
+  const entries = listing.kind === 'ready' ? listing.value.entries : EMPTY_ENTRIES;
+  const missing = listing.kind === 'ready' && listing.value.missing;
   usePickPlacement(props.project.path, props.pick, entries, setCwd);
   return {
     batch,
+    listing,
+    refresh,
     entries,
     missing,
     cwd,
@@ -111,66 +118,37 @@ function useAssetPanelState(props: AssetsPanelProps): AssetPanelState {
   };
 }
 
+const assetCache = createPanelCache<{
+  readonly entries: readonly AssetPanelEntry[];
+  readonly missing: boolean;
+}>();
+const EMPTY_ENTRIES: readonly AssetPanelEntry[] = [];
+function initialAssetDirectory(projectPath: string): string {
+  const cached = assetCache.get(projectPath);
+  if (cached?.kind === 'ready') {
+    return cached.value.entries.some((entry) => entry.isDir && entry.rel === PICK_HOME)
+      ? PICK_HOME
+      : '';
+  }
+  return PICK_HOME;
+}
 function useAssetListing(
   projectPath: string,
-  showToast: Toast,
   cwdRef: React.MutableRefObject<string>,
-  setEntries: React.Dispatch<React.SetStateAction<readonly AssetPanelEntry[]>>,
-  setMissing: React.Dispatch<React.SetStateAction<boolean>>,
   setCwd: React.Dispatch<React.SetStateAction<string>>,
-): void {
-  const callbacks = useRef({ showToast, setEntries, setMissing, setCwd });
-  callbacks.current = { showToast, setEntries, setMissing, setCwd };
+) {
+  const read = useCallback(() => readAssetListing(projectPath), [projectPath]);
+  const listing = usePanelData(assetCache, projectPath, read, onAssetListingChanged);
   useEffect(() => {
-    let active = true;
-    let reading = false;
-    let pending = false;
-    // It calls itself again only after its read has settled, never on the stack.
-    // eslint-disable-next-line stacki/bounded-recursion -- Re-entry after an awaited read.
-    async function refresh(): Promise<void> {
-      if (reading) {
-        pending = true;
-        return;
-      }
-      reading = true;
-      const result = await readAssetListing(projectPath);
-      if (active) {
-        applyListingResult(result, cwdRef.current, callbacks.current);
-      }
-      reading = false;
-      if (active && pending) {
-        pending = false;
-        void refresh();
-      }
+    if (listing.state.kind !== 'ready') {
+      return;
     }
-    void refresh();
-    const dispose = onAssetListingChanged(() => void refresh());
-    return () => {
-      active = false;
-      dispose();
-    };
-  }, [cwdRef, projectPath]);
-}
-
-function applyListingResult(
-  result: Awaited<ReturnType<typeof readAssetListing>>,
-  cwd: string,
-  callbacks: {
-    readonly showToast: Toast;
-    readonly setEntries: React.Dispatch<React.SetStateAction<readonly AssetPanelEntry[]>>;
-    readonly setMissing: React.Dispatch<React.SetStateAction<boolean>>;
-    readonly setCwd: React.Dispatch<React.SetStateAction<string>>;
-  },
-): void {
-  if (!result.ok) {
-    callbacks.showToast(result.error, 'error');
-    return;
-  }
-  callbacks.setEntries(result.value.entries);
-  callbacks.setMissing(result.value.missing);
-  if (cwd && !result.value.entries.some((entry) => entry.isDir && entry.rel === cwd)) {
-    callbacks.setCwd('');
-  }
+    const cwd = cwdRef.current;
+    if (cwd && !listing.state.value.entries.some((entry) => entry.isDir && entry.rel === cwd)) {
+      setCwd('');
+    }
+  }, [listing.state, cwdRef, setCwd]);
+  return listing;
 }
 
 function usePickPlacement(
@@ -620,9 +598,13 @@ function AssetContents({
           <AssetTile key={file.rel} file={file} props={props} state={state} actions={actions} />
         ))}
       </div>
-      {folders.length === 0 && files.length === 0 && !state.newFolder && (
-        <div className="props-empty">Empty folder. Drop files here or use the upload button.</div>
-      )}
+      <PanelReadStatus state={state.listing} label="assets" retry={state.refresh} />
+      {state.listing.kind === 'ready' &&
+        folders.length === 0 &&
+        files.length === 0 &&
+        !state.newFolder && (
+          <div className="props-empty">Empty folder. Drop files here or use the upload button.</div>
+        )}
     </div>
   );
 }

@@ -1,4 +1,5 @@
 import { browserBoundary } from './browserBoundary';
+import { prepareCloudflareAssets } from './cloudflareAssets';
 import { build } from 'esbuild';
 import { stackiFavicon } from '../src/shared/stackiBrand';
 import { prepareSiteCache } from './siteCache';
@@ -7,6 +8,7 @@ import { LIMITS } from '../vendor/stacki/shared/core/limits';
 
 await prepareSiteCache();
 await mkdir('dist', { recursive: true });
+await prepareCloudflareAssets('dist');
 await build({
   entryPoints: ['src/app/main.tsx'],
   bundle: true,

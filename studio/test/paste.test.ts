@@ -53,7 +53,7 @@ test('cross-page paste carries recursive bindings and rebases imports without ch
     output.includes("// Keep this comment and formatting.\nconst untouched = 'leave me alone';"),
   );
   assert.ok(output.endsWith('<!-- Keep this too. -->'));
-  assert.match(output, /<main>\n<Card title=\{title\} items=\{posts\} \/>\n<\/main>/);
+  assert.match(output, /<main><Card title=\{title\} items=\{posts\} \/><\/main>/);
   assert.equal(parsePage(output).editable, true);
 });
 

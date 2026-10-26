@@ -4,7 +4,8 @@ import { mkdtemp, mkdir, writeFile, rm, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { tmpdir } from 'node:os';
 import { scanProject } from '../src/features/project/projectServer';
-import { applyEdits, structuralEdits } from '../src/features/source/source';
+import { structuralEdits } from '../src/features/source/sourceOperations';
+import { applyEdits } from '../src/features/source/source';
 import { pastePlacement } from '../src/features/navigator/pastePlacement';
 import { defaultSlotInline, rootTag } from '../vendor/stacki/electron/parse/astroComponentApi';
 

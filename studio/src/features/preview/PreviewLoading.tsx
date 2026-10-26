@@ -1,22 +1,27 @@
-import { useEffect, useState } from 'react';
+import { useLayoutEffect, useState } from 'react';
 
 export function usePreviewLoading(
   url: string | undefined,
-  frame: React.RefObject<HTMLIFrameElement>,
+  container: React.RefObject<HTMLElement>,
   canvas: boolean,
+  refresh: () => void,
 ) {
   const [readyKey, setReadyKey] = useState('');
   const [slowKey, setSlowKey] = useState('');
   const [attempt, setAttempt] = useState(0);
   const key = `${url ?? ''}:${canvas}:${attempt}`;
-  useEffect(() => {
+  // Attach before yielding to the browser so a cached frame cannot announce
+  // readiness before the parent starts listening.
+  useLayoutEffect(() => {
     const timer = setTimeout(() => setSlowKey(key), 15000);
     const receive = (event: MessageEvent) => {
-      if (
-        !url ||
-        event.source !== frame.current?.contentWindow ||
-        event.origin !== new URL(url, location.href).origin
-      ) {
+      if (!url || event.origin !== new URL(url, location.href).origin) {
+        return;
+      }
+      // Browser error documents fire load too. Only our preview client can
+      // confirm readiness, and it must belong to one of this canvas's frames.
+      const frames = container.current?.querySelectorAll('iframe') ?? [];
+      if (![...frames].slice(0, 3).some((frame) => event.source === frame.contentWindow)) {
         return;
       }
       const data: unknown = event.data;
@@ -34,13 +39,15 @@ export function usePreviewLoading(
       clearTimeout(timer);
       window.removeEventListener('message', receive);
     };
-  }, [url, frame, key]);
+  }, [url, container, key]);
   return {
     ready: !!url && readyKey === key,
     slow: slowKey === key,
     attempt,
-    loaded: () => setReadyKey(key),
-    retry: () => (url ? setAttempt((value) => value + 1) : location.reload()),
+    retry: () => {
+      setAttempt((value) => value + 1);
+      refresh();
+    },
   };
 }
 

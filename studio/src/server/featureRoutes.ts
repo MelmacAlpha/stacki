@@ -1,3 +1,4 @@
+import { historyRoutes } from '../features/history/historyRoutes';
 import { accountRoute } from '../features/publishing/accountRoutes';
 import { repositoryRoute } from '../features/publishing/repositoryRoutes';
 import { discoveryRoute } from '../features/publishing/discoveryRoutes';
@@ -20,6 +21,7 @@ import { RepositorySync } from '../features/github/sync';
 import { record, string } from '../shared/validation';
 
 export function featureRoutes(root: string, rooms: ReturnType<typeof createRooms>) {
+  const history = historyRoutes(root, githubFromEnvironment());
   const cms = cmsRoutes(root, rooms);
   const variables = variableRoutes(root, rooms);
   const properties = propertyRoutes(root, rooms);
@@ -31,6 +33,7 @@ export function featureRoutes(root: string, rooms: ReturnType<typeof createRooms
     readBody: () => Promise<string>,
   ): Promise<boolean> => {
     if (
+      (await history(request, response, pathname, readBody)) ||
       (await defaultsCanvasRoute(root, rooms, request, response, pathname, readBody)) ||
       (await metadataRoute(root, rooms, request, response, pathname, readBody)) ||
       (await discoveryRoute(root, request, response, pathname, readBody)) ||
@@ -137,6 +140,7 @@ function publisherFor(
     (files, sha) => cleanup.afterPublish(files, sha),
     undefined,
     () => synchronization.latest(),
+    rooms.persist,
   );
   publisher.subscribe(rooms.publishing);
   return publisher;

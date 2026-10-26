@@ -257,6 +257,33 @@ test('insert-node beside a node copies its separator; inside, it fills an empty 
   );
 });
 
+test('self-closing non-void HTML tags gain children while inline moves preserve separators', () => {
+  const empty = snapshotText('<main />');
+  assert.equal(
+    run(
+      empty,
+      { tag: 'insert-node', placement: 'last-child', source: '<p>x</p>' },
+      anchorAt(empty, [0]),
+    ),
+    '<main><p>x</p></main>',
+  );
+  const original = '<main>  <b>a</b>  <i>b</i>  <!-- Keep --> </main>';
+  let source = original;
+  for (let index = 0; index < 40; index++) {
+    const page = snapshotText(source);
+    source = run(
+      page,
+      {
+        tag: 'move-node',
+        destination: anchorAt(page, [0, 0]),
+        placement: 'before',
+      },
+      anchorAt(page, [0, 1]),
+    );
+  }
+  assert.equal(source, original, 'Repeated moves do not create whitespace in the vacated slot');
+});
+
 test('insert-node adds children inside loops and conditional branches', () => {
   const loop = snapshotText('{items.map((item) => (\n  <p>{item}</p>\n))}\n');
   assert.equal(

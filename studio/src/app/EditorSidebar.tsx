@@ -1,3 +1,4 @@
+import { GitPanel } from '../features/history/GitPanel';
 import type { useStudioDefaultsCanvas } from '../features/settings/useStudioDefaultsCanvas';
 import { CmsNavigation } from '../features/cms/CmsWorkspace';
 import { CodePanel } from '../features/code/CodePanel';
@@ -10,7 +11,6 @@ import { ComponentsPanel } from '../features/components/ComponentsPanel';
 import { ChatPanel } from '../features/ai/ChatPanel';
 import type { EditorProps } from './Editor';
 import type { useEditor } from '../features/project/useEditor';
-import type { SharedDocument } from '../features/collaboration/useDocument';
 import type { Panel } from './EditorRail';
 interface SidebarProps {
   readonly panel: Panel;
@@ -80,7 +80,7 @@ export function EditorSidebar({
         <ComponentProperties key={file} document={document} refresh={refresh} />
       )}
       {panel === 'variables' && <VariableNavigation view={props.view} />}
-      {panel === 'history' && <HistoryPanel document={document} report={report} />}
+      {panel === 'history' && <GitPanel document={document} report={report} />}
       {panel === 'ai' && <ChatPanel file={file} refresh={refresh} error={report} />}
     </aside>
   );
@@ -106,29 +106,6 @@ function ComponentsSidebar({
         showNavigator();
       }}
     />
-  );
-}
-function HistoryPanel({
-  document,
-  report,
-}: {
-  document: SharedDocument | undefined;
-  report: (error: unknown) => void;
-}) {
-  return (
-    <>
-      <div className="panel-header">
-        <h2>History</h2>
-      </div>
-      <div className="panel-note">
-        Undo reverses your own text and layout edits in this editing session. Other editors’ changes
-        stay in place.
-      </div>
-      <div className="node-actions">
-        <button onClick={() => void document?.history.step('undo').catch(report)}>Undo</button>
-        <button onClick={() => void document?.history.step('redo').catch(report)}>Redo</button>
-      </div>
-    </>
   );
 }
 

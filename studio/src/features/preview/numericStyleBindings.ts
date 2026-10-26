@@ -10,9 +10,17 @@ const STYLE =
 // Recognize only a direct numeric prop -> CSS variable binding. Props used for
 // HTML, computed expressions, aliases or default values stay server-rendered.
 export function numericStyleBindings(source: string): readonly NumericStyleBinding[] {
+  // Every supported binding contains this literal template prefix. Most
+  // components have none; avoid parsing their entire page tree on each scan.
+  if (!source.includes('`--')) {
+    return [];
+  }
   const frontmatter = frontmatterRange(source);
+  if (!frontmatter) {
+    return [];
+  }
   const parsed = parsePage(source);
-  if (!frontmatter || !parsed.editable) {
+  if (!parsed.editable) {
     return [];
   }
   const syntax = ts.createSourceFile('component.ts', frontmatter.value, ts.ScriptTarget.Latest);

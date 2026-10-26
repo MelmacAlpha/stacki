@@ -11,6 +11,7 @@ import type { RepositoryAccess } from '../src/features/github/github';
 import { publishGit } from '../src/features/publishing/publishGit';
 import { published } from '../src/features/publishing/publishFailure';
 import { ok, err } from '../vendor/stacki/shared/core/result';
+import { createRooms } from '../src/features/collaboration/rooms';
 
 async function fixture(hosting = false) {
   const root = await mkdtemp(path.join(tmpdir(), 'studio-publish-'));
@@ -44,6 +45,43 @@ function repository(commit: RepositoryAccess['commit']): RepositoryAccess {
   };
 }
 const receipt = { sha: 'b'.repeat(40), url: 'https://github.com/example/site/commit/b' };
+
+test('publishing captures accepted edits before their scheduled disk projection', async () => {
+  const root = await fixture();
+  const rooms = createRooms(root);
+  const room = await rooms.get('src/pages/index.astro');
+  room.text.insert(0, '<!-- accepted -->');
+  let commits = 0;
+  const publisher = new Publisher(
+    root,
+    repository(async (source) => {
+      const content = published(
+        await publishGit(source.git, ['show', `${source.tree}:src/pages/index.astro`]),
+      );
+      assert.equal(content.trim(), '<!-- accepted --><h1>Captured</h1>');
+      commits++;
+      return ok(receipt);
+    }),
+    rooms.coordinator,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    rooms.persist,
+  );
+  try {
+    assert.equal(
+      await readFile(path.join(root, 'src/pages/index.astro'), 'utf8'),
+      '<h1>Captured</h1>',
+    );
+    assert.equal((await publisher.publish('github')).kind, 'committed');
+    assert.equal(commits, 1);
+  } finally {
+    await room.durable.flush();
+    room.document.destroy();
+    await rm(root, { recursive: true, force: true });
+  }
+});
 
 test('GitHub and None skip builds, dependencies and hooks', async (context) => {
   for (const target of ['github', 'all'] as const) {

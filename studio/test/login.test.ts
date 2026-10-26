@@ -1,9 +1,22 @@
+// Goal: GitHub login preserves authorization, cooldown, and single-use callback boundaries.
+// Method: use signed requests and counted upstream stubs without real credentials.
 import { waitCookie } from '../src/features/auth/loginCooldown';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { githubLogin } from '../src/features/auth/githubLogin';
+import { githubLogin as handleLogin, type AuthConfig } from '../src/features/auth/githubLogin';
+import type { GitHubProfile } from '../src/features/auth/profile';
+import { loginAttemptFixture } from './loginAttemptFixture';
 import { signSession, verifySession } from '../src/features/auth/session';
 import { retryAt } from '../src/features/auth/githubRateLimit';
+
+const attempts = loginAttemptFixture().create();
+function githubLogin(
+  request: Request,
+  configuration: AuthConfig,
+  authorize: (profile: GitHubProfile) => Promise<boolean>,
+) {
+  return handleLogin(request, configuration, attempts, authorize);
+}
 
 const config = {
   GITHUB_CLIENT_ID: 'test-client',

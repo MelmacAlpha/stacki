@@ -54,7 +54,7 @@ export function HtmlToolbar({ source, toggleSource, command, rememberSelection }
                 onMouseDown={(event) => event.preventDefault()}
                 onClick={() => command({ name })}
               >
-                {text}
+                <FormatLabel name={name} text={text} />
               </button>
             ))}
             <button
@@ -87,6 +87,21 @@ interface LinkProps {
   readonly setLink: (value: string | undefined) => void;
   readonly command: Props['command'];
 }
+function FormatLabel({ name, text }: { readonly name: string; readonly text: string }) {
+  return name === 'underline' ? (
+    <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true" fill="none">
+      <path
+        d="M4 2v5a4 4 0 0 0 8 0V2M3 14h10"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+      />
+    </svg>
+  ) : (
+    <>{text}</>
+  );
+}
+
 function HtmlLink({ link, setLink, command }: LinkProps) {
   return (
     <form

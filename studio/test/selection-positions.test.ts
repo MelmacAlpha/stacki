@@ -2,7 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as Y from 'yjs';
 import { captureSelectionPositions } from '../src/features/collaboration/selectionPositions';
-import { structuralEdits } from '../src/features/source/source';
+import { structuralEdits } from '../src/features/source/sourceOperations';
+import {} from '../src/features/source/source';
 import type { Peer } from '../src/features/collaboration/presence';
 
 test('undoing a move preserves the other editor’s selected element and ownership', () => {

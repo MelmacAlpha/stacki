@@ -75,6 +75,7 @@ export class Publisher {
     readonly deploy:
       ((sha: string) => Promise<'live' | 'pending'>) | undefined = deploymentFromEnvironment(),
     readonly refresh?: () => Promise<unknown>,
+    readonly persistDraft?: () => Promise<void>,
   ) {}
   start(target: PublishTarget = 'all'): PublishState {
     if (!this.github && target !== 'hosting') {
@@ -202,6 +203,7 @@ export class Publisher {
       published(await this.refresh().then(ok, publishFailure));
     }
     const captured = await this.coordinator.run(async () => {
+      await this.persistDraft?.();
       const expectedHead = published(
         await readFile(path.join(this.root, '.studio-state/github-base.json'), 'utf8')
           .then((body) => {
@@ -237,6 +239,7 @@ export class Publisher {
         published(await this.refresh().then(ok, publishFailure));
       }
       const { source, expectedHead } = await this.coordinator.run(async () => {
+        await this.persistDraft?.();
         const expectedHead = published(
           await readFile(path.join(this.root, '.studio-state/github-base.json'), 'utf8')
             .then((body) => {
@@ -306,6 +309,7 @@ export class Publisher {
       throw new PublishFailure('Choose a hosting provider in Publish settings.');
     }
     await this.coordinator.run(async () => {
+      await this.persistDraft?.();
       published(await createHostingSnapshot(this.root, snapshot));
     });
     this.state = { ...progress, stage: 'building', deployment: 'pending' };

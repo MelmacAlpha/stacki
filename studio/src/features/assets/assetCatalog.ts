@@ -1,4 +1,5 @@
 import path from 'node:path';
+import { batchedRead } from '../../shared/batchedRead';
 import { stat, readdir } from 'node:fs/promises';
 import { safePath, walk } from '../project/projectServer';
 import { MEDIA_EXT } from './assetStateTypes';
@@ -10,7 +11,6 @@ export async function assetCatalog(root: string) {
     MEDIA_EXT.test(file),
   );
   const state = await readAssetState(root);
-  const entries: WireAssetEntry[] = [];
   const directories = new Set<string>(state.directories);
   for (const rootName of ['public', 'src']) {
     try {
@@ -22,14 +22,14 @@ export async function assetCatalog(root: string) {
       }
     }
   }
-  for (const file of files) {
+  const filesRead = await batchedRead(files, async (file): Promise<WireAssetEntry> => {
     const info = await stat(await safePath(root, file));
     const parent = file.split('/').slice(0, -1).join('/');
     const parts = parent.split('/');
     for (let index = 1; index <= parts.length; index++) {
       directories.add(parts.slice(0, index).join('/'));
     }
-    entries.push({
+    return {
       rel: file,
       abs: file,
       name: file.split('/').at(-1) ?? file,
@@ -37,8 +37,9 @@ export async function assetCatalog(root: string) {
       root: parts[0] ?? '',
       isDir: false,
       size: info.size,
-    });
-  }
+    };
+  });
+  const entries: WireAssetEntry[] = [...filesRead];
   for (const directory of [...directories].sort()) {
     const parts = directory.split('/');
     entries.push({
