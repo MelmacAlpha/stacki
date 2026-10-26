@@ -1,4 +1,5 @@
 import { loadInsertionDefaults } from '../settings/loadDefaults';
+import { assert } from '../../../vendor/stacki/shared/core/assert';
 import { maintainConnection } from './connectionLease';
 import { parseSaveSequence } from './saveProtocol';
 import { selectionRequest } from './selectionIntent';
@@ -33,6 +34,12 @@ interface LivePresence {
   readonly snapshot: () => readonly CursorPacket[];
 }
 
+interface SourceSnapshot {
+  readonly source: string;
+  readonly bytes: Uint8Array;
+  readonly scheduling: 'classify' | 'immediate';
+}
+
 export class Room {
   readonly document = new Y.Doc();
   readonly text = this.document.getText('source');
@@ -43,7 +50,7 @@ export class Room {
   private saved = '';
   private revision = 0;
   private queued = 0;
-  readonly durable: BatchedWriter;
+  readonly durable: BatchedWriter<SourceSnapshot>;
   private readonly storage: DraftStorage;
   constructor(
     readonly root: string,
@@ -61,7 +68,9 @@ export class Room {
       }
     });
     this.storage = new DraftStorage(root);
-    this.durable = new BatchedWriter((bytes) => this.storage.write(this.file, bytes));
+    // Projection and persistence share one bounded writer. Keystrokes must not
+    // queue behind disk I/O or trigger an Astro rebuild for every character.
+    this.durable = new BatchedWriter((snapshot) => this.writeSnapshot(snapshot), 300);
   }
   async initialize() {
     const source = await readSource(this.root, this.file);
@@ -183,15 +192,15 @@ export class Room {
       if (!this.applyUpdate(message, socket)) {
         // A replay can already exist in memory after a failed disk or durable write.
         // CRDT deduplication proves convergence, not persistence.
-        if (await this.writeSource()) {
-          // Reannounce the repaired source so peers also refresh rendered output.
+        if (this.text.toString() !== this.saved) {
           this.broadcast({
             type: 'update',
             update: Buffer.from(Y.encodeStateAsUpdate(this.document)).toString('base64'),
             revision: this.revision,
+            writePending: true,
           });
         }
-        this.acknowledgeSave(socket, save);
+        this.acknowledgeSave(socket, save, 'immediate');
         return;
       }
     } else if (message['type'] === 'action') {
@@ -217,13 +226,15 @@ export class Room {
     this.presence();
     // Peers consume the accepted CRDT delta immediately. File projection and
     // durable storage must not sit between a keystroke and another editor.
-    await this.writeSource(message['type'] === 'update' ? 'classify' : 'immediate');
-    this.broadcast({ type: 'source-written', structural: message['type'] === 'action' });
-    this.acknowledgeSave(socket, save);
+    this.acknowledgeSave(socket, save, message['type'] === 'update' ? 'classify' : 'immediate');
   }
-  private acknowledgeSave(socket: WebSocket, save: number | undefined) {
+  private acknowledgeSave(
+    socket: WebSocket,
+    save: number | undefined,
+    scheduling: SourceSnapshot['scheduling'],
+  ) {
     const revision = this.revision;
-    void this.durable.save(Y.encodeStateAsUpdate(this.document)).then(
+    void this.durable.save(this.snapshot(scheduling), scheduling === 'immediate').then(
       () => this.send(socket, { type: 'saved', revision, save }),
       () =>
         this.broadcast({
@@ -429,11 +440,28 @@ export class Room {
     }, origin);
   }
   async persist() {
-    await this.durable.save(Y.encodeStateAsUpdate(this.document), true);
-    await this.writeSource();
+    await this.durable.save(this.snapshot('immediate'), true);
   }
-  private async writeSource(scheduling: 'classify' | 'immediate' = 'immediate') {
-    const source = this.text.toString();
+  private snapshot(scheduling: SourceSnapshot['scheduling']): SourceSnapshot {
+    return {
+      source: this.text.toString(),
+      bytes: Y.encodeStateAsUpdate(this.document),
+      scheduling,
+    };
+  }
+  private async writeSnapshot(snapshot: SourceSnapshot) {
+    assert(snapshot.source.length <= MAX_SOURCE, 'Projected source stays within the source limit');
+    assert(snapshot.bytes.length <= 8_000_000, 'Projected document stays within the draft limit');
+    const changed = await this.writeSource(snapshot.source, snapshot.scheduling);
+    await this.storage.write(this.file, snapshot.bytes);
+    if (changed) {
+      this.broadcast({
+        type: 'source-written',
+        structural: snapshot.scheduling === 'immediate',
+      });
+    }
+  }
+  private async writeSource(source: string, scheduling: SourceSnapshot['scheduling']) {
     if (source === this.saved) {
       return false;
     }
@@ -548,6 +576,11 @@ export function createRooms(root: string) {
     hasClients: () => [...readyRooms].some((room) => room.clients.size > 0),
     projectChanged: () => broadcast({ type: 'project-changed' }),
     coordinator,
+    // Call under the coordinator before filesystem snapshots or multi-file writes.
+    // Await actual saves, because flushing a failed batch alone does not retry it.
+    persist: async () => {
+      await Promise.all([...readyRooms].map((room) => room.persist()));
+    },
     sockets,
     get,
     read: async (file: string) => {

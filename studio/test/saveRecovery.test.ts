@@ -24,6 +24,10 @@ test('accepted edits reach peers before a delayed source write, without acknowle
   const waiting = new Promise<void>((resolve) => {
     release = resolve;
   });
+  let noteWriting = () => {};
+  const writing = new Promise<void>((resolve) => {
+    noteWriting = resolve;
+  });
   const write = filesystem.writeFile;
   const saved: unknown[] = [];
   state.client.on('message', (bytes) => {
@@ -34,6 +38,7 @@ test('accepted edits reach peers before a delayed source write, without acknowle
   });
   context.mock.method(filesystem, 'writeFile', async (...args: Parameters<typeof write>) => {
     if (args[0] === path.join(state.root, file) + '.studio-tmp') {
+      noteWriting();
       await waiting;
     }
     return write(...args);
@@ -46,12 +51,32 @@ test('accepted edits reach peers before a delayed source write, without acknowle
     assert.equal(message['writePending'], true);
     assert.equal(await readFile(path.join(state.root, file), 'utf8'), original);
     assert.equal(saved.length, 0, 'Delivery does not acknowledge persistence');
+    await writing;
+    const next = new Y.Doc();
+    Y.applyUpdate(next, Y.encodeStateAsUpdate(state.room.document));
+    next.getText('source').insert(0, '<!-- next edit -->');
+    const second = response(state.observer, 'update');
+    state.client.send(
+      JSON.stringify({
+        type: 'update',
+        save: 8,
+        epoch: next.getMap('metadata').get('epoch'),
+        update: Buffer.from(Y.encodeStateAsUpdate(next)).toString('base64'),
+      }),
+    );
+    next.destroy();
+    await second;
+    assert.equal(saved.length, 0, 'Later edits also bypass an earlier stalled save');
     const written = response(state.observer, 'source-written');
     const persisted = response(state.client, 'saved');
     release();
     await written;
-    assert.equal(await readFile(path.join(state.root, file), 'utf8'), edited);
     await persisted;
+    await state.room.durable.flush();
+    assert.equal(
+      await readFile(path.join(state.root, file), 'utf8'),
+      '<!-- next edit -->' + edited,
+    );
   } finally {
     release();
     context.mock.restoreAll();

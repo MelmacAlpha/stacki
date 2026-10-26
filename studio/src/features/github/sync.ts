@@ -63,6 +63,7 @@ export class RepositorySync {
         throw new Error('GitHub changed again. Review the new conflicts before resolving.');
       }
       await this.rooms.coordinator.run(async () => {
+        await this.rooms.persist();
         if ((await this.baseline()) !== base) {
           throw new Error('Published revision changed during sync. Try again.');
         }

@@ -878,6 +878,13 @@ only after the atomic file replacement. `saved` remains a separate acknowledgmen
 storage succeeds. Failed writes retain the accepted draft in memory and use the existing replay
 recovery; delivery alone never acknowledges persistence.
 
+Accepted updates leave the project mutation queue before disk I/O. A bounded writer coalesces
+source and CRDT snapshots over 300 ms, preserving their order and acknowledging each edit only
+after a snapshot containing it reaches both stores. Structural actions request an immediate flush.
+Publishing, repository synchronization and multi-file transactions persist accepted room state
+under the project coordinator before reading filesystem snapshots, so batching cannot omit an
+accepted edit from a publish or rollback. Unchanged synchronization emits no edit or render notice.
+
 Studio's Vite watcher ignores its reserved `.studio-tmp` staging files. Only the completed
 atomic replacement reaches Astro's source watcher; staging creation/removal must not rebuild
 routes, invalidate CSS modules or refresh project catalogs. Project-provided ignore rules remain

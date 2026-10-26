@@ -140,6 +140,7 @@ function publisherFor(
     (files, sha) => cleanup.afterPublish(files, sha),
     undefined,
     () => synchronization.latest(),
+    rooms.persist,
   );
   publisher.subscribe(rooms.publishing);
   return publisher;

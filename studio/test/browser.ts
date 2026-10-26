@@ -198,7 +198,7 @@ try {
     );
     return labels.indexOf('Heading') > labels.indexOf('Eyebrow');
   });
-  await phone.getByRole('button', { name: 'History', exact: true }).click();
+  await phone.getByRole('button', { name: 'Git', exact: true }).click();
   await phone.getByRole('button', { name: 'Undo', exact: true }).click();
   await phone.getByRole('button', { name: 'Navigator', exact: true }).click();
   await phone.getByRole('button', { name: 'Expand all', exact: true }).click();

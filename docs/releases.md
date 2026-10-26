@@ -15,6 +15,21 @@ Use an isolated checkout when other tasks are editing the working directory. Mat
 Studio, Studio release manifest, and npm starter versions. Never move an existing release tag to
 include later changes.
 
+## 0.1.80 updates
+
+- Collaborative edits continue reaching peers during slow saves. Source and draft writes are
+  batched, while save confirmations and publishing still wait for persistence.
+- Preview rendering avoids duplicate work, preserves newer text while older renders arrive,
+  and recovers more reliably from disconnects and delayed startup.
+- Desktop and Studio share source-preserving structural edits and faster component usage scans.
+  Atomic staging files no longer trigger unnecessary Astro route rebuilds.
+- Assets, CMS and Variables retain loaded content between visits and distinguish loading from
+  empty results. Studio adds the shared Git history graph and file diffs.
+- Collaboration locks appear in element settings with the editor's avatar. Connection status
+  replaces the Draft badge; loading counts and sign-in rate limits provide clearer feedback.
+- Cloud rendering remains dependent on project work and container capacity. These changes do
+  not promise instant rendering on every project or add independent per-editor Git branches.
+
 ## 0.1.79 updates
 
 - New Astro and Lumos projects let you choose npm or pnpm. Stacki checks that the chosen
