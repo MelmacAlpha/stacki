@@ -6,7 +6,7 @@ type Environment = Readonly<Record<string, string | undefined>>;
 const pathAPI = (platform: Platform): typeof path.win32 =>
   platform === 'win32' ? path.win32 : path.posix;
 
-function comparablePath(value: string, platform: Platform): string {
+export function comparablePath(value: string, platform: Platform = process.platform): string {
   const resolved = pathAPI(platform).resolve(value);
   return platform === 'win32' ? resolved.toLocaleLowerCase('en-US') : resolved;
 }

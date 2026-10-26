@@ -4,7 +4,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { hasOnlyLiteralTextChanges } from '../src/features/preview/liveTextChanges';
-import { nodesOf, applyEdits, structuralEdits } from '../src/features/source/source';
+import { structuralEdits } from '../src/features/source/sourceOperations';
+import { nodesOf, applyEdits } from '../src/features/source/source';
 
 const source =
   '<main><Button variant="primary">Choose a campus</Button>' +

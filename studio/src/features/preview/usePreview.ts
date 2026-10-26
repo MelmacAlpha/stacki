@@ -44,13 +44,14 @@ export function usePreview(
   }, []);
   const callbacks = useRef({ onSelect, onOpen, report, onOutside: () => outside.current?.() });
   callbacks.current = { onSelect, onOpen, report, onOutside: () => outside.current?.() };
-  const target = usePreviewTarget(file, enabled, callbacks);
+  const { target, retry } = usePreviewTarget(file, enabled, callbacks);
   const send = (message: unknown) => postToFrame(frame.current, target?.origin, message);
   const source = usePreviewSource(target?.url, send);
   usePreviewMessages(frame, target, callbacks, { setOutlines, setGuide });
   const contextMenu = usePreviewContextMenu(frame, target?.origin, file, onSelect);
 
   return {
+    retry,
     contextMenu,
     frame,
     outlines,
@@ -158,9 +159,9 @@ function requestStructuralPreview(
   if (!(event instanceof CustomEvent) || event.detail !== 'structure' || !origin) {
     return false;
   }
-  // This notification follows the accepted disk write. Structural edits have
-  // no safe text-only stand-in; do not wait for the push grace period.
-  frame?.contentWindow?.postMessage({ type: 'avb:patch-now', immediate: true }, origin);
+  // This follows the accepted disk write. The frame uses the existing push
+  // when connected and falls back to a pull when the push is unavailable.
+  frame?.contentWindow?.postMessage({ type: 'avb:patch-now' }, origin);
   return true;
 }
 // What the page measured: the outlines it draws, and what the column guide is
@@ -210,6 +211,13 @@ function usePreviewTarget(
   callbacks: React.MutableRefObject<{ report: (error: unknown) => void }>,
 ) {
   const [target, setTarget] = useState<{ url: string; origin: string }>();
+  const [revision, setRevision] = useState(0);
+  const retry = useCallback(() => {
+    // Hosted entry URLs expire. A retry needs a fresh grant, not another iframe
+    // pointed at the expired URL. Removing the old target also resets readiness.
+    setTarget(undefined);
+    setRevision((value) => value + 1);
+  }, []);
   useEffect(() => {
     let active = true;
     if (!enabled || !isCanvasPage(file)) {
@@ -223,12 +231,16 @@ function usePreviewTarget(
           setTarget(target);
         }
       })
-      .catch((error: unknown) => callbacks.current.report(error));
+      .catch((error: unknown) => {
+        if (active) {
+          callbacks.current.report(error);
+        }
+      });
     return () => {
       active = false;
     };
-  }, [file, enabled, callbacks]);
-  return target;
+  }, [file, enabled, callbacks, revision]);
+  return { target, retry };
 }
 
 function postToFrame(

@@ -4,6 +4,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { once } from 'node:events';
 import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import filesystem from 'node:fs/promises';
+import { syncBuiltinESMExports } from 'node:module';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { WebSocket, WebSocketServer, type RawData } from 'ws';
@@ -15,6 +17,48 @@ import { record, string } from '../src/shared/validation';
 const file = 'src/pages/index.astro';
 const original = '<Section><h1>Preserve this draft</h1></Section>';
 const edited = '<Section theme="dark"><h1>Preserve this draft</h1></Section>';
+
+test('accepted edits reach peers before a delayed source write, without acknowledging Saved', async (context) => {
+  const state = await fixture();
+  let release = () => {};
+  const waiting = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const write = filesystem.writeFile;
+  const saved: unknown[] = [];
+  state.client.on('message', (bytes) => {
+    const message = record(JSON.parse(bytes.toString()));
+    if (message['type'] === 'saved') {
+      saved.push(message);
+    }
+  });
+  context.mock.method(filesystem, 'writeFile', async (...args: Parameters<typeof write>) => {
+    if (args[0] === path.join(state.root, file) + '.studio-tmp') {
+      await waiting;
+    }
+    return write(...args);
+  });
+  syncBuiltinESMExports();
+  try {
+    const received = response(state.observer, 'update');
+    state.client.send(state.update);
+    const message = await received;
+    assert.equal(message['writePending'], true);
+    assert.equal(await readFile(path.join(state.root, file), 'utf8'), original);
+    assert.equal(saved.length, 0, 'Delivery does not acknowledge persistence');
+    const written = response(state.observer, 'source-written');
+    const persisted = response(state.client, 'saved');
+    release();
+    await written;
+    assert.equal(await readFile(path.join(state.root, file), 'utf8'), edited);
+    await persisted;
+  } finally {
+    release();
+    context.mock.restoreAll();
+    syncBuiltinESMExports();
+    await state.close();
+  }
+});
 
 for (const failure of ['source', 'durable'] as const) {
   test(`replay repairs a failed ${failure} write before acknowledging Saved`, async () => {

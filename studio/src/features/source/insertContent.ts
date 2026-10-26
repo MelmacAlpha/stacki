@@ -1,43 +1,10 @@
 import { serializeNodes } from '../../../vendor/stacki/electron/parse/astroSerialize';
-import { HTML_TAGS, VOID_TAGS } from '../../../vendor/stacki/src/editor/elementSchemas';
+import { VOID_TAGS } from '../../../vendor/stacki/src/editor/elementSchemas';
 import { PLACEHOLDER_PROPS } from '../../../vendor/stacki/src/features/palette/astroAssets';
-import { record, string } from '../../shared/validation';
-import { insertFragment, parsePage, type Edit, type ParserNode, type TreeAction } from './source';
-
-export type InsertContent =
-  | { readonly type: 'element'; readonly tag: string }
-  | { readonly type: 'astroAsset'; readonly name: 'Image' | 'Picture' }
-  | {
-      readonly type: 'map' | 'cond' | 'text' | 'comment' | 'expr' | 'doctype' | 'style' | 'script';
-    };
-
-export function parseInsertContent(input: unknown): InsertContent {
-  const value = record(input);
-  const type = string(value['type'], 20);
-  if (type === 'element') {
-    const tag = string(value['tag'], 30);
-    if (!HTML_TAGS.includes(tag) && tag !== 'slot') {
-      throw new Error('Invalid HTML element');
-    }
-    return { type, tag };
-  }
-  if (type === 'astroAsset' && (value['name'] === 'Image' || value['name'] === 'Picture')) {
-    return { type, name: value['name'] };
-  }
-  if (
-    type === 'map' ||
-    type === 'cond' ||
-    type === 'text' ||
-    type === 'comment' ||
-    type === 'expr' ||
-    type === 'doctype' ||
-    type === 'style' ||
-    type === 'script'
-  ) {
-    return { type };
-  }
-  throw new Error('Invalid insert choice');
-}
+import { parseInsertContent, type InsertContent } from './insertContentContract';
+export { parseInsertContent } from './insertContentContract';
+import { insertFragment } from './sourceOperations';
+import { parsePage, type Edit, type ParserNode, type TreeAction } from './source';
 
 export function contentInsertionEdits(
   source: string,

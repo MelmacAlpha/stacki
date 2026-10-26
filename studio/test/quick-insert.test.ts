@@ -2,13 +2,8 @@
 // every choice must round-trip, preserve existing source, and reject invalid input.
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import {
-  applyEdits,
-  flatten,
-  parseAction,
-  parsePage,
-  structuralEdits,
-} from '../src/features/source/source';
+import { structuralEdits } from '../src/features/source/sourceOperations';
+import { applyEdits, flatten, parseAction, parsePage } from '../src/features/source/source';
 import { parseInsertContent } from '../src/features/source/insertContent';
 import { insertTargetFor } from '../vendor/stacki/src/editor/insertTarget';
 import { parsePageModel } from '../vendor/stacki/shared/page/pageNode';

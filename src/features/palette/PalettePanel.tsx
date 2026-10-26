@@ -276,7 +276,6 @@ function PaletteItem({
             type="button"
             className="palette-instances"
             disabled={component.instances === undefined || component.instances === 0}
-            style={{ visibility: component.instances === undefined ? 'hidden' : 'visible' }}
             onClick={(event) => {
               event.stopPropagation();
               void props.openUsage(component, event.currentTarget);
@@ -285,7 +284,9 @@ function PaletteItem({
             onDoubleClick={(event) => event.stopPropagation()}
             onDragStart={(event) => event.preventDefault()}
           >
-            {component.instances ?? 0} instance{component.instances === 1 ? '' : 's'}
+            {component.instances === undefined
+              ? 'Checking instances...'
+              : `${component.instances} instance${component.instances === 1 ? '' : 's'}`}
           </button>
         </div>
       </span>

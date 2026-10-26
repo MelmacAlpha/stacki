@@ -9,6 +9,7 @@ import { boolean, list, optional, pathText, record, text } from '../../../shared
 import { parseIpcPayload } from '../../../shared/ipc/ipcPayloads';
 import type { Result } from '../../../shared/core/result';
 import { cleanError } from '../../lib/cleanError';
+import { historyTransport } from '../../ipc/editorEnvironment';
 
 export type HistoryFile = IpcResults['git:allFiles'][number];
 export type HistoryCommitFile = NonNullable<WireCommitInfo['files']>[number];
@@ -65,7 +66,7 @@ export function readHistoryLog(projectPath: string, skip: number, ref?: string) 
     withFiles: true,
     ...(ref === undefined ? {} : { ref }),
   });
-  return historyRequest(parseHistoryLog, () => window.avb.gitLog(payload));
+  return historyRequest(parseHistoryLog, () => historyTransport.log(payload));
 }
 
 export function readHistoryFiles(projectPath: string) {

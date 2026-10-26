@@ -9,6 +9,7 @@
 //
 // Every rejection is decided in the three plan functions; the helpers compute.
 import { assert } from '../core/assert';
+import { HTML_VOID_TAGS } from '../page/htmlTags';
 import type { Operation, Placement, RejectionReason } from './intent';
 import { stripEdits, scopeAt, type SourceReplacement } from './loopScope';
 import type { ByteRelocation, Plan, PostKind, Splice } from './planner';
@@ -511,8 +512,8 @@ function leavesCodeEmpty(
   return others.length === 0;
 }
 
-/** What a removal takes: the node, and the whitespace run before it when that
- * run holds a line break (the node's own line); otherwise the whitespace after
+/** What a removal takes: the node and its preceding whitespace-only separator;
+ * otherwise the whitespace after
  * it through the first line break, so no blank line is left; otherwise the
  * node alone (it sat inline). The runs never cross a sibling or the parent. */
 export function removalRange(
@@ -522,7 +523,7 @@ export function removalRange(
 ): ByteSpan {
   const bounds = siblingBounds(bytes, projection, node);
   const before = whitespaceBefore(bytes, node.span.start, bounds.floor);
-  if (containsNewline(bytes, toByteSpan(before, node.span.start))) {
+  if (before < node.span.start) {
     return toByteSpan(before, node.span.end);
   }
   const after = whitespaceAfter(bytes, node.span.end, bounds.ceiling);
@@ -614,8 +615,7 @@ function listAt(
 
 // Inside a tag, loop, or condition branch: beside its first or last child. An
 // empty tag writes after its opening tag; an empty branch replaces its `null`
-// placeholder. A self-closing component becomes a paired component because a
-// component with a default slot can start empty and gain its first child.
+// placeholder. A self-closing non-void tag gains a closing tag with its first child.
 function insertionInside(
   bytes: ByteString,
   projection: ValidProjection,
@@ -657,9 +657,11 @@ function insertionInside(
   }
   const open = openTagEnd(bytes, parent);
   if (open.selfClosing) {
-    return parent.kind === 'component'
-      ? ok(insertionIntoSelfClosingComponent(bytes, parent, open.end, text))
-      : err('unsupported-operation');
+    const name = textOf(bytes, toByteSpan(parent.span.start + 1, tagNameEnd(bytes, parent)));
+    if (parent.kind === 'element' && HTML_VOID_TAGS.has(name.toLowerCase())) {
+      return err('unsupported-operation');
+    }
+    return ok(insertionIntoSelfClosingTag(bytes, parent, open.end, text));
   }
   const close = closeTagStart(bytes, parent, open.end);
   if (close === undefined) {
@@ -670,13 +672,16 @@ function insertionInside(
   return ok({ range: point(open.end), text: `${lead}${text}`, anchorPath: parent.path });
 }
 
-function insertionIntoSelfClosingComponent(
+function insertionIntoSelfClosingTag(
   bytes: ByteString,
   parent: ProjectedNode,
   openEnd: number,
   text: string,
 ): Insertion {
-  assert(parent.kind === 'component', 'A paired conversion starts from a component');
+  assert(
+    parent.kind === 'component' || parent.kind === 'element',
+    'A paired conversion starts from a tag',
+  );
   const slash = openEnd - 2;
   assert(bytes[slash] === 0x2f, 'A self-closing component ends in a slash');
   const nameSpan = toByteSpan(parent.span.start + 1, tagNameEnd(bytes, parent));

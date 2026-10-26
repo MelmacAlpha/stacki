@@ -13,11 +13,11 @@ export function App() {
   const view = useEditorView();
   const navigation = useEditorNavigation();
   const { notices, performAction, report, dismiss } = useNotifications();
-  const { project, refresh, attempt, failure, revision } = useProjectLoad(report);
+  const { project, refresh, reconcile, attempt, failure, revision } = useProjectLoad(report);
   useEffect(() => {
     document.title = project ? `Stacki - ${project.name}` : 'Stacki';
   }, [project]);
-  useAstroFileNotifications(report, refresh);
+  useAstroFileNotifications(report, refresh, reconcile);
   const session = useSession(report);
   return (
     <>

@@ -1,7 +1,8 @@
 import { serializeNodes } from '../../../vendor/stacki/electron/parse/astroSerialize';
 import { defaultInstance, type InsertionDefaults } from './instanceDefaults';
 import { componentImport, resolveImport, type ComponentImport } from './imports';
-import { insertFragment, parsePage, type Edit, type TreeAction } from './source';
+import { insertFragment } from './sourceOperations';
+import { parsePage, type Edit, type TreeAction } from './source';
 
 type Insert = Extract<TreeAction, { kind: 'insert' }>;
 export function componentInsertionEdits(

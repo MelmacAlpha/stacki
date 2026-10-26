@@ -4,15 +4,21 @@ import {
   parseAstroFileChanges,
 } from '../../../vendor/stacki/shared/properties/astroFileChanges';
 
-export function useAstroFileNotifications(report: (message: unknown) => void, refresh: () => void) {
+export function useAstroFileNotifications(
+  report: (message: unknown) => void,
+  refresh: () => void,
+  reconcile: () => void,
+) {
   useEffect(() => {
     const events = new EventSource('/studio/api/astro-events');
     // Opening or reconnecting the stream catches changes made while disconnected.
-    events.onopen = refresh;
+    events.onopen = reconcile;
     events.addEventListener('project-changed', () => {
       refresh();
-      window.dispatchEvent(new Event('studio:assets-changed'));
       window.dispatchEvent(new Event('studio:source-updated'));
+    });
+    events.addEventListener('assets-changed', () => {
+      window.dispatchEvent(new Event('studio:assets-changed'));
     });
     events.onmessage = (event: MessageEvent<unknown>) => {
       if (typeof event.data !== 'string') {
@@ -26,5 +32,5 @@ export function useAstroFileNotifications(report: (message: unknown) => void, re
       refresh();
     };
     return () => events.close();
-  }, [report, refresh]);
+  }, [report, refresh, reconcile]);
 }

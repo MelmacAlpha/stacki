@@ -1,12 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import {
-  applyEdits,
-  flatten,
-  nodesOf,
-  structuralEdits,
-  parsePage,
-} from '../src/features/source/source';
+import { structuralEdits } from '../src/features/source/sourceOperations';
+import { applyEdits, flatten, nodesOf, parsePage } from '../src/features/source/source';
 import { HEADING_TEXT, PARAGRAPH_TEXT } from '../src/features/source/instanceDefaults';
 
 const files = {

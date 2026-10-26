@@ -25,6 +25,21 @@ source distribution does not create resources or claim that an account is config
 
 These reduce accidental use; they are not a monthly spending cap. Active editors, abusive traffic, other account resources, storage operations, and subscription fees can still increase the bill. Check any other account resources and subscriptions separately.
 
+### Interactive editing capacity
+
+Keep at least the template's one-vCPU capacity for a substantial Astro project with concurrent
+editors. A `basic` instance has only a quarter vCPU: compilation, route scanning and rendering
+compete with the collaboration connection for that CPU budget. Streaming text before saving does
+not remove this contention. Measure sustained typing with two sessions and the actual project
+before reducing the instance size; a small fixture or one isolated edit can hide growing delays.
+
+Project configuration survives Studio updates, so an existing `basic` override stays in effect
+even when the main template uses `standard-2`. A custom one-vCPU instance requires at least 3 GiB
+RAM. Review [Cloudflare's limits](https://developers.cloudflare.com/containers/platform/limits/)
+and [usage pricing](https://developers.cloudflare.com/containers/platform/pricing/) before changing
+an existing deployment. CPU is billed by actual use; provisioned RAM and disk cost money while
+the container is active. More CPU does not guarantee a particular latency over the network.
+
 ## Deployment layout
 
 Keep Studio at `studio/` inside the website repository. Its `cloudflare/wrangler.jsonc`
@@ -37,6 +52,11 @@ For a Container deployment, configure the build root as `studio`, build command
 `npm run build`, and deploy command `npx wrangler deploy --config cloudflare/wrangler.jsonc`.
 Website deployment remains controlled by the website's own configuration. Accepting a
 Studio update creates a review branch; merge and redeploy the CMS to activate it.
+
+Each build writes `dist/.assetsignore` to exclude JavaScript and CSS source maps from
+Cloudflare's static asset upload. Maps remain available locally for debugging; a map
+larger than Cloudflare's 25 MiB per-asset limit does not prevent deployment. Runtime
+editor assets still need to fit that limit.
 
 ## Requirements
 
@@ -70,6 +90,12 @@ For collaborators outside the app owner's account, make the **GitHub App registr
 Register your own GitHub App for this project; the release bundle does not include an App registration or credentials. The website repository can remain private. Open the Stacki logo menu at the top left of the studio to see your signed-in account or sign out; profile pictures appear in the collaborator group.
 
 If GitHub returns HTTP 429 during sign-in, the studio honors its `Retry-After` or rate-limit reset header and otherwise waits at least one minute. A signed, HTTP-only cooldown cookie blocks repeated login attempts from that browser during the wait; no automatic token-exchange retries run. Afterward, start a fresh sign-in instead of refreshing the callback URL. Existing valid studio sessions are reused. Safe failure references distinguish token exchange, profile lookup, and repository authorization without logging codes or tokens. See [GitHub's rate-limit guidance](https://docs.github.com/en/rest/using-the-rest-api/troubleshooting-the-rest-api#rate-limit-errors). Repository Write access alone cannot clear GitHub's upstream rate limit.
+
+Sign-in uses the existing project Durable Object to coordinate callbacks without starting the
+preview Container. Concurrent callbacks share one exchange; a consumed state stays consumed after
+a Worker restart. Only state identifiers and expiration times are persisted, with at most 128
+attempts retained for ten minutes. HEAD requests and browser prefetches never start OAuth.
+These controls prevent duplicate exchanges; GitHub can still enforce upstream limits independently.
 
 Store these through Wrangler's secret prompts, not checked-in files:
 

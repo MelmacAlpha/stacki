@@ -10,7 +10,8 @@ import path from 'node:path';
 import { createRooms } from '../src/features/collaboration/rooms';
 import { metadataRoute } from '../src/features/settings/projectMetadata';
 import { loadInsertionDefaults } from '../src/features/settings/loadDefaults';
-import { structuralEdits, applyEdits, parsePage } from '../src/features/source/source';
+import { structuralEdits } from '../src/features/source/sourceOperations';
+import { applyEdits, parsePage } from '../src/features/source/source';
 import { filePath, record } from '../src/shared/validation';
 import { metadataFiles } from '../src/features/settings/projectMetadata';
 

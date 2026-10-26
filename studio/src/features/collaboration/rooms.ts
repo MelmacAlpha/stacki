@@ -12,19 +12,21 @@ import * as Y from 'yjs';
 import { WebSocket, WebSocketServer, type RawData } from 'ws';
 import { PresenceColors } from './presenceColors';
 import { CursorRelay } from './cursorRelay';
+import { sourceRenderMode, type SourceRenderMode } from '../preview/sourceRenderMode';
 import type { CursorPacket } from './cursorPresence';
 import { writeFile, rename } from 'node:fs/promises';
 import { createHash, randomUUID } from 'node:crypto';
 import { MAX_SOURCE, record, sourcePath, string, textChange } from '../../shared/validation';
 import { pasteEdits } from '../source/paste';
-import { applyEdits, parseAction, structuralEdits } from '../source/source';
+import { structuralEdits } from '../source/sourceOperations';
+import { applyEdits, parseAction } from '../source/source';
 import { BatchedWriter } from '../storage/batchedWriter';
 import { DraftStorage } from '../storage/draftStorage';
 import { SerialQueue } from '../../shared/serialQueue';
 import { readSource, preparePath } from '../project/projectServer';
 
 interface LivePresence {
-  readonly written?: (file: string) => void;
+  readonly written?: (file: string, mode: SourceRenderMode) => void;
   readonly publishing?: () => PublishState;
   readonly colors: PresenceColors;
   readonly broadcast: (packet: CursorPacket) => void;
@@ -182,7 +184,7 @@ export class Room {
         // A replay can already exist in memory after a failed disk or durable write.
         // CRDT deduplication proves convergence, not persistence.
         if (await this.writeSource()) {
-          // Other peers missed the edit when the first disk write failed.
+          // Reannounce the repaired source so peers also refresh rendered output.
           this.broadcast({
             type: 'update',
             update: Buffer.from(Y.encodeStateAsUpdate(this.document)).toString('base64'),
@@ -197,7 +199,6 @@ export class Room {
     } else {
       throw new Error('Unknown collaboration message');
     }
-    await this.writeSource();
     this.revision++;
     const update = Buffer.from(Y.encodeStateAsUpdate(this.document, before)).toString('base64');
     for (const client of this.clients.keys()) {
@@ -205,6 +206,7 @@ export class Room {
         type: 'update',
         update,
         revision: this.revision,
+        writePending: true,
         ownAction: client === socket && message['type'] === 'action',
         structural: message['type'] === 'action',
         selection: this.clients.get(client)?.selection ?? '',
@@ -213,6 +215,10 @@ export class Room {
       });
     }
     this.presence();
+    // Peers consume the accepted CRDT delta immediately. File projection and
+    // durable storage must not sit between a keystroke and another editor.
+    await this.writeSource(message['type'] === 'update' ? 'classify' : 'immediate');
+    this.broadcast({ type: 'source-written', structural: message['type'] === 'action' });
     this.acknowledgeSave(socket, save);
   }
   private acknowledgeSave(socket: WebSocket, save: number | undefined) {
@@ -426,7 +432,7 @@ export class Room {
     await this.durable.save(Y.encodeStateAsUpdate(this.document), true);
     await this.writeSource();
   }
-  private async writeSource() {
+  private async writeSource(scheduling: 'classify' | 'immediate' = 'immediate') {
     const source = this.text.toString();
     if (source === this.saved) {
       return false;
@@ -434,8 +440,10 @@ export class Room {
     const absolute = await preparePath(this.root, this.file);
     await writeFile(absolute + '.studio-tmp', source);
     await rename(absolute + '.studio-tmp', absolute);
+    const mode =
+      scheduling === 'classify' ? sourceRenderMode(this.file, this.saved, source) : 'immediate';
     this.saved = source;
-    this.live?.written?.(this.file);
+    this.live?.written?.(this.file, mode);
     return true;
   }
   async setSource(source: string) {
@@ -497,7 +505,7 @@ export function createRooms(root: string) {
   const rooms = new Map<string, Promise<Room>>();
   const readyRooms = new Set<Room>();
   let publishing: PublishState = { kind: 'idle' };
-  const sourceListeners = new Set<(file: string) => void>();
+  const sourceListeners = new Set<(file: string, mode: SourceRenderMode) => void>();
   const live = { ...livePresence(readyRooms, sourceListeners), publishing: () => publishing };
   const broadcast = (message: unknown) => {
     for (const room of readyRooms) {
@@ -529,7 +537,7 @@ export function createRooms(root: string) {
     return pending;
   };
   return {
-    onWrite: (listener: (file: string) => void) => {
+    onWrite: (listener: (file: string, mode: SourceRenderMode) => void) => {
       sourceListeners.add(listener);
       return () => sourceListeners.delete(listener);
     },
@@ -557,12 +565,12 @@ export function createRooms(root: string) {
 }
 function livePresence(
   rooms: ReadonlySet<Room>,
-  sourceListeners: ReadonlySet<(file: string) => void>,
+  sourceListeners: ReadonlySet<(file: string, mode: SourceRenderMode) => void>,
 ): LivePresence {
   return {
-    written: (file) => {
+    written: (file, mode) => {
       for (const listener of sourceListeners) {
-        listener(file);
+        listener(file, mode);
       }
     },
     colors: new PresenceColors(),

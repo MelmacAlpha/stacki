@@ -49,13 +49,7 @@
 .project-name {
   font-weight: 550;
 }
-.draft-chip {
-  font-size: 10px;
-  color: var(--text-dim);
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  padding: 3px 6px;
-}
+
 .studio-titlebar .page-switch-btn {
   width: auto;
   min-width: 100px;
@@ -476,17 +470,17 @@
 }
 @media (max-width: 700px) {
   .studio-titlebar {
+    grid-template-columns: auto minmax(0, 1fr) auto;
     height: 50px;
     padding: 0 8px;
     gap: 6px;
   }
-  .draft-chip,
-  .save-state,
   .collaborators {
     display: none;
   }
   .studio-titlebar .page-switch-btn {
-    max-width: 150px;
+    min-width: 0;
+    max-width: 100%;
   }
   .studio-titlebar.component-open .collaborators {
     display: none;

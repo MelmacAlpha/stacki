@@ -5,13 +5,8 @@ import * as Y from 'yjs';
 import { assertClientAction, assertClientSourceChange } from '../src/features/roles/clientPolicy';
 import { setEditorRole } from '../src/features/roles/roleStore';
 import { EditorHistory } from '../src/features/collaboration/editorHistory';
-import {
-  applyEdits,
-  flatten,
-  nodesOf,
-  structuralEdits,
-  type TreeAction,
-} from '../src/features/source/source';
+import { structuralEdits } from '../src/features/source/sourceOperations';
+import { applyEdits, flatten, nodesOf, type TreeAction } from '../src/features/source/source';
 
 const source = await readFile(new URL('./fixtures/homepage.astro', import.meta.url), 'utf8');
 const heading = flatten(nodesOf(source)).find((node) => node.name === 'Heading');

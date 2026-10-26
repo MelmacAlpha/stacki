@@ -1,13 +1,17 @@
 import type { MiddlewareHandler } from 'astro';
+import { renderScope } from './renderRequest';
 
 const MAX_RENDER_BYTES = 4_000_000;
 
-// Prerendered Astro routes intentionally hide request headers, so embed the
-// baseline for every HTML render and remove it from subsequent diff inputs.
 // Keep the exact initial server rendering. A second request can already contain
 // a collaborator's newer edit, making the first DOM patch incorrectly a no-op.
 export const onRequest: MiddlewareHandler = async ({ request }, next) => {
   const response = await next();
+  // Internal pushes already have an initial baseline in the browser. Streaming
+  // their response directly avoids copying and JSON-escaping the entire page twice.
+  if (renderScope.getStore() === 'patch') {
+    return response;
+  }
   if (
     request.method !== 'GET' ||
     !response.headers.get('content-type')?.includes('text/html') ||

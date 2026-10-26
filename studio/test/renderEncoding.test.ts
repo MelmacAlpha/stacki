@@ -1,3 +1,5 @@
+// Goal: compression stays lossless and does not monopolize the collaboration loop.
+// Method: round-trip Unicode markup and reject invalid or oversized wire payloads.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { gzipSync } from 'node:zlib';
@@ -9,11 +11,11 @@ test('full page render compression preserves Unicode and complete markup', async
     '<main>' +
     '<section><h2>Hello 🌍</h2><p>Content &amp; text</p></section>'.repeat(3000) +
     '</main>';
-  const encoded = encodeRenderedHTML(html);
+  const encoded = await encodeRenderedHTML(html);
   assert.ok('htmlGzip' in encoded);
   assert.ok(encoded.htmlGzip.length < html.length / 10);
   assert.equal(await decodeRenderedHTML(encoded), html);
-  assert.deepEqual(encodeRenderedHTML('<h1>Small</h1>'), { html: '<h1>Small</h1>' });
+  assert.deepEqual(await encodeRenderedHTML('<h1>Small</h1>'), { html: '<h1>Small</h1>' });
   assert.equal(await decodeRenderedHTML({ html: 'Old server' }), 'Old server');
 });
 test('invalid compressed messages and expanded HTML above the limit are rejected', async () => {

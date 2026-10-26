@@ -74,6 +74,8 @@ test('asset listings ignore stale projects and coalesce watcher bursts', async (
       await Promise.resolve();
     });
   await render('/one');
+  assert.match(document.body.textContent, /Loading assets/);
+  assert.doesNotMatch(document.body.textContent, /Empty folder/);
   await render('/two');
   assert.deepEqual(
     reads.map((read) => read.projectPath),
@@ -104,7 +106,16 @@ test('asset listings ignore stale projects and coalesce watcher bursts', async (
   await act(async () => {
     reads[3].request.resolve({ entries: [rootEntry('src')], missing: true });
     await Promise.resolve();
-    root.unmount();
+    root.render(undefined);
   });
+  await render('/two');
+  assert.match(document.body.textContent, /src/);
+  assert.doesNotMatch(document.body.textContent, /Loading assets|Empty folder/);
+  assert.equal(reads.length, 5, 'Reopened cached listings revalidate in the background');
+  await act(async () => {
+    reads[4].request.resolve({ entries: [rootEntry('public')], missing: false });
+  });
+  assert.match(document.body.textContent, /public/, 'A changed inventory replaces cached data');
+  await act(async () => root.unmount());
   dom.window.close();
 });

@@ -2,14 +2,14 @@ import { createAstroNotifications } from '../features/notifications/astroNotific
 import { readPackagePreviews } from '../../vendor/stacki/electron/lib/componentSources';
 import { METADATA_FILES } from '../../vendor/stacki/shared/properties/projectMetadata';
 import { isDefaultsCanvas } from '../../vendor/stacki/shared/properties/defaultsCanvas';
-import { pushWrittenSource } from '../features/preview/pushWrittenSource';
 import { instrumentVariant } from '../features/preview/variantRuntime';
 import { mutateAsset } from '../features/assets/assetOperations';
 import { configureRenderPush } from '../features/preview/renderPushServer';
 import { managedAsset, MEDIA_EXT } from '../features/assets/assetStateTypes';
 import { readAssetState, saveAssetState } from '../features/assets/assetState';
 import { reauthorizeConnection } from '../features/collaboration/connectionLease';
-import { assetCatalog } from '../features/assets/assetCatalog';
+import { projectCatalogs } from '../features/project/projectCatalogs';
+import { sourceWatch } from '../features/project/sourceWatch';
 import { parseProfile } from '../features/auth/profile';
 import type { Duplex } from 'node:stream';
 import type { AstroIntegration } from 'astro';
@@ -22,10 +22,11 @@ import {
   renderComponentPreviewPage,
 } from '../../vendor/stacki/electron/previewServer/componentPreview';
 import { createRooms } from '../features/collaboration/rooms';
-import { scanProject, safePath, preparePath, readSource } from '../features/project/projectServer';
+import { safePath, preparePath, readSource } from '../features/project/projectServer';
 import { filePath, sourcePath, string, record, MAX_SOURCE } from '../shared/validation';
 import { featureRoutes } from './featureRoutes';
 import { saveAsset } from '../features/storage/assetStorage';
+import { interceptBrowserReloads } from '../features/preview/browserReloads';
 
 interface Options {
   readonly root: string;
@@ -36,7 +37,7 @@ interface Options {
 interface PreviewOptions extends Options {
   readonly trailingSlash: 'always' | 'never' | 'ignore';
 }
-import type { ViteDevServer, HMRPayload, Plugin } from 'vite';
+import type { ViteDevServer, Plugin } from 'vite';
 export default function studio(options: Options): AstroIntegration {
   let prioritizeRequests = () => {};
   const rooms = createRooms(options.root);
@@ -67,6 +68,7 @@ export default function studio(options: Options): AstroIntegration {
         updateConfig({
           vite: {
             plugins: [
+              sourceWatch(),
               componentPreviewPlugin([options.root], readPackagePreviews),
               previewPlugin({ ...options, trailingSlash: config.trailingSlash }, features, rooms),
             ],
@@ -146,6 +148,7 @@ async function handleRequest(
   options: Options,
   features: ReturnType<typeof featureRoutes>,
   rooms: ReturnType<typeof createRooms>,
+  catalogs: ReturnType<typeof projectCatalogs>,
 ) {
   response.setHeader('Cache-Control', 'no-store');
   response.setHeader('X-Content-Type-Options', 'nosniff');
@@ -171,11 +174,11 @@ async function handleRequest(
     return;
   }
   if (url.pathname === '/studio/api/assets' && request.method === 'GET') {
-    json(response, 200, await assetCatalog(options.root));
+    await sendCatalog(response, catalogs.assets);
     return;
   }
   if (url.pathname === '/studio/api/project' && request.method === 'GET') {
-    json(response, 200, await scanProject(options.root));
+    await sendCatalog(response, catalogs.project);
     return;
   }
   if (url.pathname === '/studio/api/file' && request.method === 'GET') {
@@ -227,6 +230,15 @@ function mime(file: string): string {
     )[extension] ?? 'application/octet-stream'
   );
 }
+async function sendCatalog(
+  response: ServerResponse,
+  read: () => Promise<{ readonly value: unknown; readonly timing: string }>,
+) {
+  const catalog = await read();
+  response.setHeader('Server-Timing', catalog.timing);
+  json(response, 200, catalog.value);
+}
+
 function json(response: ServerResponse, status: number, value: unknown) {
   response.statusCode = status;
   response.setHeader('Content-Type', 'application/json');
@@ -260,9 +272,11 @@ function configureStudioServer(
   rooms: ReturnType<typeof createRooms>,
 ) {
   const render = configureRenderPush(server, options.port, options.root);
-  const stop = rooms.onWrite((file) => pushWrittenSource(server, options.root, file, render));
-  server.httpServer?.once('close', stop);
-  interceptReloads(server, render);
+  // Vite owns source invalidation. Rendering immediately after a room write
+  // races its watcher and renders the same edit again when HMR finishes.
+  interceptBrowserReloads(server, render.invalidate);
+  const stopRenderTiming = rooms.onWrite((_file, mode) => render.sourceWritten(mode));
+  server.httpServer?.once('close', stopRenderTiming);
   const subscribe = createAstroNotifications(server, options.root);
   configureStudioRequests(server, options, features, rooms, subscribe);
   server.httpServer?.on('upgrade', (request: IncomingMessage, socket: Duplex, head: Buffer) => {
@@ -319,33 +333,6 @@ function configureProjectWatching(
       server.ws.send({ type: 'custom', event: 'studio:css-changed' });
     }
   });
-}
-
-function interceptReloads(server: ViteDevServer, render: () => void) {
-  const channels = new Set([
-    server.ws,
-    ...Object.values(server.environments ?? {})
-      .map((item) => item.hot)
-      .filter(Boolean),
-  ]);
-  for (const channel of channels) {
-    if (!channel) {
-      continue;
-    }
-    const send = channel.send.bind(channel);
-    channel.send = (payload: HMRPayload | string, data?: unknown) => {
-      if (typeof payload !== 'string' && payload.type === 'full-reload') {
-        render();
-        send({ type: 'custom', event: 'avb:page-changed' });
-        return;
-      }
-      if (typeof payload === 'string') {
-        send(payload, data);
-      } else {
-        send(payload);
-      }
-    };
-  }
 }
 
 async function createFile(
@@ -434,6 +421,10 @@ function configureStudioRequests(
   rooms: ReturnType<typeof createRooms>,
   subscribe: ReturnType<typeof createAstroNotifications>,
 ) {
+  const catalogs = projectCatalogs(server, options.root);
+  // Accepted writes invalidate before their reply, independently of watcher timing.
+  const stopCatalogs = rooms.onWrite(catalogs.invalidate);
+  server.httpServer?.once('close', stopCatalogs);
   server.middlewares.use(function studioRequests(request, response, next) {
     const url = new URL(request.url ?? '/', 'http://studio');
     const pathname = url.pathname;
@@ -456,10 +447,17 @@ function configureStudioRequests(
       subscribe(response, reauthorizeConnection(request));
       return;
     }
-    void handleRequest(request, response, options, features, rooms).catch((error) =>
-      json(response, 400, {
-        error: error instanceof Error ? error.message : 'Request failed',
-      }),
-    );
+    void handleRequest(request, response, options, features, rooms, catalogs)
+      .catch((error) =>
+        json(response, 400, {
+          error: error instanceof Error ? error.message : 'Request failed',
+        }),
+      )
+      .finally(() => {
+        // Uploads and metadata writes also change catalogs outside document rooms.
+        if (request.method !== 'GET') {
+          catalogs.invalidate();
+        }
+      });
   });
 }

@@ -66,7 +66,9 @@ export function EditorHeader({
           cursorChat={cursorChat}
         />
         <span className="project-name">{project.name}</span>
-        <span className="draft-chip">{direct ? 'Local files' : 'Draft'}</span>
+        <span className="save-state" role="status">
+          {document?.status ?? 'Connecting'}
+        </span>
         {role === 'client' && <span className="client-role-badge">Client</span>}
         {componentOpen && switcher}
       </div>
@@ -81,7 +83,6 @@ export function EditorHeader({
       </div>
       <div className="studio-titlebar-end">
         <Collaborators document={document} session={session} follow={follow} />
-        <span className="save-state">{document?.status ?? 'Connecting'}</span>
         <PreviewButton preview={interactivePreview} />
         {!direct && <PublishButton report={report} />}
       </div>

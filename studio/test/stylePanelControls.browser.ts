@@ -1,3 +1,6 @@
+// Goal: exercise real style popovers and modifier forwarding without timing races.
+// Method: wait for the closing context menu before opening the next control; its
+// outside-click layer intentionally consumes clicks during the closing animation.
 import assert from 'node:assert/strict';
 import type { Page } from 'playwright';
 
@@ -5,6 +8,7 @@ export async function checkStyleControls(page: Page) {
   await page.getByRole('button', { name: 'Style context', exact: true }).click();
   await page.getByText('Add query', { exact: true }).waitFor();
   await page.keyboard.press('Escape');
+  await page.getByText('Add query', { exact: true }).waitFor({ state: 'hidden' });
   for (const name of ['Flex settings', 'Grid settings', 'Inline settings']) {
     const button = page.getByRole('button', { name, exact: true });
     await button.click();

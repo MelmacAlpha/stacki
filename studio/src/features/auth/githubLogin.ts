@@ -6,6 +6,8 @@ import { cookie, sessionCookie, signSession, verifySession } from './session';
 import { SignInFailure, signInMessages, signInStep, type SignInProblem } from './signInFailure';
 import { retryAt } from './githubRateLimit';
 import { loginWait, waitCookie } from './loginCooldown';
+import { loginCountdown } from './loginCountdown';
+import { loginLifetimeMs, type LoginAttempts } from './loginAttempts';
 
 export interface AuthConfig {
   readonly GITHUB_CLIENT_ID: string;
@@ -17,36 +19,43 @@ export interface AuthConfig {
 export async function githubLogin(
   request: Request,
   config: AuthConfig,
+  attempts: LoginAttempts,
   authorize: (profile: GitHubProfile) => Promise<boolean>,
 ): Promise<Response | undefined> {
   const url = new URL(request.url);
   if (url.pathname === '/studio/auth/logout') {
     return logout(request, config);
   }
+  if (!['/studio/auth/login', '/studio/auth/callback'].includes(url.pathname)) {
+    return undefined;
+  }
+  if (request.method !== 'GET') {
+    return new Response(null, {
+      status: 405,
+      headers: { Allow: 'GET', 'Cache-Control': 'no-store' },
+    });
+  }
+  if (
+    (request.headers.get('Sec-Purpose') ?? request.headers.get('Purpose') ?? '').includes(
+      'prefetch',
+    )
+  ) {
+    return new Response(null, { status: 204, headers: { 'Cache-Control': 'no-store' } });
+  }
+  const existing = await reuseLoginSession(request, config, authorize);
+  if (existing) {
+    return url.pathname === '/studio/auth/callback' ? completeAttempt(existing) : existing;
+  }
   if (url.pathname === '/studio/auth/login') {
-    const current = await verifySession(
-      cookie(request, '__Host-studio'),
-      config.SESSION_SECRET,
-      'studio',
-    );
-    if (current && (await authorize(current))) {
-      return new Response(null, {
-        status: 302,
-        headers: { Location: `${config.STUDIO_ORIGIN}/studio`, 'Cache-Control': 'no-store' },
-      });
-    }
     const until = await loginWait(request, config.SESSION_SECRET);
     return until > Date.now() ? rateLimitedPage(until, config.SESSION_SECRET) : beginLogin(config);
-  }
-  if (url.pathname !== '/studio/auth/callback') {
-    return undefined;
   }
   const until = await loginWait(request, config.SESSION_SECRET);
   if (until > Date.now()) {
     return completeAttempt(await rateLimitedPage(until, config.SESSION_SECRET));
   }
   try {
-    return completeAttempt(await finishLogin(request, config, authorize));
+    return completeAttempt(await finishLogin(request, config, attempts, authorize));
   } catch (error) {
     const failure = error instanceof SignInFailure ? error : new SignInFailure('unavailable');
     const { problem, stage, status, code } = failure;
@@ -71,9 +80,32 @@ export async function githubLogin(
   }
 }
 
+async function reuseLoginSession(
+  request: Request,
+  config: AuthConfig,
+  authorize: (profile: GitHubProfile) => Promise<boolean>,
+): Promise<Response | undefined> {
+  const current = await verifySession(
+    cookie(request, '__Host-studio'),
+    config.SESSION_SECRET,
+    'studio',
+  );
+  if (current) {
+    if (await authorize(current)) {
+      // Back, refresh, and a second callback should reuse an authorized session instead of OAuth.
+      return new Response(null, {
+        status: 302,
+        headers: { Location: `${config.STUDIO_ORIGIN}/studio`, 'Cache-Control': 'no-store' },
+      });
+    }
+  }
+  return undefined;
+}
+
 async function finishLogin(
   request: Request,
   config: AuthConfig,
+  attempts: LoginAttempts,
   authorize: (profile: GitHubProfile) => Promise<boolean>,
 ) {
   const url = new URL(request.url);
@@ -92,6 +124,28 @@ async function finishLogin(
   if (!code) {
     return loginPage('expired', 400);
   }
+  if (code.length > 1000) {
+    return loginPage('expired', 400);
+  }
+  const result = await attempts.run(state.login, state.expires, () =>
+    completeLogin(code, config, authorize),
+  );
+  if (result.ok) {
+    return result.value;
+  }
+  switch (result.error) {
+    case 'expired':
+      return loginPage('expired', 400);
+    case 'capacity':
+      return loginPage('unavailable', 503, 'callback-attempt-capacity');
+  }
+}
+
+async function completeLogin(
+  code: string,
+  config: AuthConfig,
+  authorize: (profile: GitHubProfile) => Promise<boolean>,
+) {
   const token = await signInStep('token', () => exchangeCode(code, config));
   const profile = await signInStep('profile', () => fetchProfile(token));
   if (!(await signInStep('repository', () => authorize(profile)))) {
@@ -139,9 +193,8 @@ export function loginPage(
   reference = '',
   seconds = 0,
 ): Response {
-  const message =
-    (problem ? signInMessages[problem] : 'Sign in to edit and publish your website.') +
-    (seconds ? ` Wait at least ${seconds} seconds, then start a new sign-in below.` : '');
+  const message = problem ? signInMessages[problem] : 'Sign in to edit and publish your website.';
+  const countdown = loginCountdown(seconds);
   const detail = reference
     ? `<p>Reference: ${reference.replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 80)}</p>`
     : '';
@@ -169,21 +222,22 @@ p{color:#999;line-height:1.6}
   <path d="${stackiMarkPath}" fill="currentColor" />
 </svg>
 <h1>${problem ? 'Unable to sign in' : 'Welcome to your studio'}</h1>
-<p>${message}</p>
+<p id="login-message">${message}${countdown.markup}</p>
 <a href="/studio/auth/login">
   <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
     <path d="${githubIconPath}" fill="currentColor" />
   </svg>
   <span>Sign in with GitHub</span>
 </a>${detail}
-</main></body></html>`,
+</main>${countdown.script}</body></html>`,
     {
       status,
       headers: {
         'Content-Type': 'text/html; charset=utf-8',
         'Cache-Control': 'no-store',
         'Content-Security-Policy':
-          "default-src 'none'; img-src data:; style-src 'unsafe-inline'; frame-ancestors 'none'",
+          "default-src 'none'; img-src data:; style-src 'unsafe-inline'; frame-ancestors 'none'" +
+          countdown.policy,
       },
     },
   );
@@ -241,7 +295,7 @@ async function exchangeCode(code: string, config: AuthConfig) {
 async function beginLogin(config: AuthConfig) {
   const state = crypto.randomUUID();
   const signed = await signSession(
-    { id: 1, login: state, expires: Date.now() + 600_000, audience: 'login' },
+    { id: 1, login: state, expires: Date.now() + loginLifetimeMs, audience: 'login' },
     config.SESSION_SECRET,
   );
   const destination = new URL('https://github.com/login/oauth/authorize');

@@ -184,19 +184,7 @@ export class SharedDocument {
   private receive(event: MessageEvent) {
     try {
       const message = record(JSON.parse(string(event.data, 12_000_000)));
-      if (this.cursors.receive(message)) {
-        return;
-      }
-      if (message['type'] === 'project-changed') {
-        window.dispatchEvent(new CustomEvent('studio:project-changed'));
-        return;
-      }
-      if (message['type'] === 'publishing') {
-        receiveSharedPublish(message['state']);
-        return;
-      }
-      if (message['type'] === 'ping') {
-        this.send({ type: 'pong' });
+      if (this.receiveSignal(message)) {
         return;
       }
       if (message['type'] === 'sync' || message['type'] === 'update') {
@@ -205,7 +193,11 @@ export class SharedDocument {
           if (this.epoch && this.epoch !== epoch) {
             this.error =
               'The server draft was replaced. This browser still has the previous draft; export its source before clearing this site’s stored data.';
+            // A different document identity cannot converge by reconnecting. Keep
+            // the local draft intact and stop transport recovery until it is resolved.
             this.ready = false;
+            this.disconnectConnection();
+            this.status = 'Needs attention';
             this.emit();
             return;
           }
@@ -230,7 +222,9 @@ export class SharedDocument {
           }
           this.select(this.selection, this.page || this.file, this.occurrence);
         }
-        notifySourceUpdated(message);
+        if (message['writePending'] !== true) {
+          notifySourceUpdated(message);
+        }
       } else if (message['type'] === 'saved') {
         this.receiveSaved(parseSaveSequence(message['save']));
       } else if (message['type'] === 'selection') {
@@ -247,6 +241,27 @@ export class SharedDocument {
     } catch (error) {
       this.error = String(error);
       this.emit();
+    }
+  }
+  private receiveSignal(message: Record<string, unknown>): boolean {
+    if (this.cursors.receive(message)) {
+      return true;
+    }
+    switch (message['type']) {
+      case 'project-changed':
+        window.dispatchEvent(new CustomEvent('studio:project-changed'));
+        return true;
+      case 'publishing':
+        receiveSharedPublish(message['state']);
+        return true;
+      case 'ping':
+        this.send({ type: 'pong' });
+        return true;
+      case 'source-written':
+        notifySourceUpdated(message);
+        return true;
+      default:
+        return false;
     }
   }
   private receiveSaved(sequence: number | undefined) {

@@ -20,7 +20,11 @@ export function createRemoteCursor(root: ShadowRoot) {
   arrow.setAttribute('viewBox', '0 0 24 28');
   arrow.setAttribute('aria-hidden', 'true');
   const path = document.createElementNS(arrow.namespaceURI, 'path');
-  path.setAttribute('d', 'M2 2L20 16L12 17L8 25Z');
+  path.setAttribute(
+    'd',
+    'M3.1 2.8Q1.7 1.7 2.1 3.5L7.4 23.5Q8 25.4 8.9 23.6L12 17L19 16.1Q21 15.8 19.4 14.5Z',
+  );
+  path.setAttribute('stroke-linejoin', 'round');
   arrow.append(path);
   const label = document.createElement('div');
   label.className = 'cursor-label';

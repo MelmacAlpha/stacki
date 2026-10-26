@@ -1,12 +1,7 @@
-import { numericStyleBindings } from '../preview/numericStyleBindings';
+import { ComponentAnalysis } from './componentAnalysis';
+import { batchedRead } from '../../shared/batchedRead';
 import { opendir, readFile, realpath, stat, mkdir, lstat } from 'node:fs/promises';
 import path from 'node:path';
-import { componentSchema } from '../components/componentSchema';
-import {
-  parseSlots,
-  rootTag,
-  defaultSlotInline,
-} from '../../../vendor/stacki/electron/parse/astroComponentApi';
 import { sourcePath, filePath, MAX_SOURCE } from '../../shared/validation';
 import {
   packageComponentFiles,
@@ -102,18 +97,24 @@ export async function walk(root: string, directory: string): Promise<string[]> {
   }
   return files.sort();
 }
-export async function scanProject(root: string) {
+export async function scanProject(root: string, analysis = new ComponentAnalysis()) {
   const files = [...(await walk(root, 'src')), ...(await walk(root, 'public'))];
   const componentFiles = [
     ...packageComponentFiles(root),
     ...files.filter((file) => file.endsWith('.astro') && !file.startsWith('src/pages/')),
   ];
+  const classes = new Set<string>();
   const components = await Promise.all(
     componentFiles.map(async (file) => {
       const source = await readComponentSource(root, file);
+      // Reuse the validated component source instead of reading it twice.
+      if (!file.startsWith('node_modules/')) {
+        for (const name of sourceClasses(file, source)) {
+          classes.add(name);
+        }
+      }
       const importPath = componentSpecifier(root, file);
       const owner = packageOf(file);
-      const renderTag = rootTag(source);
       return {
         file,
         name: path.basename(file, '.astro'),
@@ -127,27 +128,16 @@ export async function scanProject(root: string) {
                 importPath: packageComponentImport(root, file) ?? '',
               },
             }),
-        fields: await componentSchema(file, source, (candidate) =>
-          readComponentSource(root, candidate),
-        ),
-        slots: parseSlots(source),
-        numericStyles: numericStyleBindings(source),
-        slotText: defaultSlotInline(source),
-        ...(renderTag === undefined ? {} : { renderTag }),
+        ...(await analysis.read(file, source, (candidate) => readComponentSource(root, candidate))),
       };
     }),
   );
-  const classes = new Set<string>();
-  for (const file of files.filter((file) => /\.(css|astro)$/.test(file))) {
-    const source = await readSource(root, file);
-    const styles = file.endsWith('.astro')
-      ? [...source.matchAll(/<style[^>]*>([\s\S]*?)<\/style>/g)].map((match) => match[1]).join('\n')
-      : source;
-    for (const match of styles.matchAll(/\.([a-zA-Z_][\w-]*)/g)) {
-      if (match[1]) {
-        classes.add(match[1]);
-      }
-    }
+  const componentPaths = new Set(componentFiles);
+  const styleFiles = files.filter(
+    (file) => /\.(css|astro)$/.test(file) && !componentPaths.has(file),
+  );
+  for (const name of await scanStyleClasses(root, styleFiles)) {
+    classes.add(name);
   }
   return {
     name: path.basename(root) === 'workspace' ? 'Example site' : path.basename(root),
@@ -165,4 +155,20 @@ export async function scanProject(root: string) {
 
 async function readComponentSource(root: string, file: string): Promise<string> {
   return file.startsWith('node_modules/') ? readPackageSource(root, file) : readSource(root, file);
+}
+
+async function scanStyleClasses(root: string, files: readonly string[]) {
+  const batches = await batchedRead(files, async (file) =>
+    sourceClasses(file, await readSource(root, file)),
+  );
+  return new Set(batches.flat());
+}
+
+function sourceClasses(file: string, source: string): readonly string[] {
+  const styles = file.endsWith('.astro')
+    ? [...source.matchAll(/<style[^>]*>([\s\S]*?)<\/style>/g)].map((match) => match[1]).join('\n')
+    : source;
+  return [...styles.matchAll(/\.([a-zA-Z_][\w-]*)/g)].flatMap((match) =>
+    match[1] ? [match[1]] : [],
+  );
 }

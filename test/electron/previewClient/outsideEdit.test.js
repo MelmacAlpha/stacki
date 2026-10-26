@@ -125,8 +125,8 @@ const settle = (ms = 20) => new Promise((resolve) => setTimeout(resolve, ms));
     window.document.getElementById('probe')?.textContent,
   );
 
-  // A subscribed socket can miss a structural render. Only the editor parent
-  // can bypass the push grace period after the source write is acknowledged.
+  // Accepted structure uses the subscribed push without competing HTTP work.
+  // A missing push still falls back, so an apparently open socket cannot strand an edit.
   window.document.dispatchEvent(new window.CustomEvent('studio:render-push', { detail: true }));
   const beforeImmediate = fetches;
   await say({ type: 'avb:patch-now', immediate: true });
@@ -138,10 +138,20 @@ const settle = (ms = 20) => new Promise((resolve) => setTimeout(resolve, ms));
     }),
   );
   await settle(40);
-  check('accepted structure bypasses the 1500ms push delay', fetches === beforeImmediate + 1);
+  check('accepted structure reuses the connected push', fetches === beforeImmediate);
+  window.document.dispatchEvent(new window.CustomEvent('studio:render-html', { detail: served }));
+  await settle(40);
   check(
-    'the complete structural render reaches the DOM immediately',
+    'the complete pushed structural render reaches the DOM',
     window.document.getElementById('probe')?.textContent === 'probe three',
+  );
+  served = PAGE('four');
+  await say({ type: 'avb:patch-now' });
+  await settle(1600);
+  check('a missed push falls back to one HTTP rendering', fetches === beforeImmediate + 1);
+  check(
+    'fallback applies the current source',
+    window.document.getElementById('probe')?.textContent === 'probe four',
   );
   window.document.dispatchEvent(new window.CustomEvent('studio:render-push', { detail: false }));
 

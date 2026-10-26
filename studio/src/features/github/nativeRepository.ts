@@ -9,6 +9,9 @@ import { publishFailure } from '../publishing/publishFailure';
 /** Keep Node's Git transport out of the Worker bundle that owns the GitHub App private key. */
 export class NativeRepository implements RepositoryAccess {
   constructor(private readonly access: GitHubRepository | RemoteRepository) {}
+  historyConnection() {
+    return this.access.publishConnection();
+  }
   incoming(base: string) {
     return this.access.incoming(base);
   }

@@ -99,8 +99,9 @@ function PreviewSurface({
 }) {
   const loading = usePreviewLoading(
     props.preview.url,
-    props.preview.frame,
+    sizing.wrapRef,
     props.device === 'canvas',
+    props.preview.retry,
   );
   return (
     <div
@@ -115,7 +116,6 @@ function PreviewSurface({
             key={loading.attempt}
             url={props.preview.renderURL ?? props.preview.url}
             refreshKey={loading.attempt}
-            onPreviewLoaded={loading.loaded}
           />
         ) : (
           <DesignFrame
@@ -123,7 +123,6 @@ function PreviewSurface({
             props={props}
             sizing={sizing}
             shownGuide={shownGuide}
-            loaded={loading.loaded}
           />
         ))}
       {!loading.ready && <PreviewLoading slow={loading.slow} retry={loading.retry} />}
@@ -134,12 +133,10 @@ function DesignFrame({
   props,
   sizing,
   shownGuide,
-  loaded,
 }: {
   readonly props: Props;
   readonly sizing: ReturnType<typeof usePreviewSizing>;
   readonly shownGuide: ShownGuide | undefined;
-  readonly loaded: () => void;
 }) {
   return (
     <>
@@ -159,11 +156,11 @@ function DesignFrame({
             title="Site preview"
             src={props.preview.url}
             onLoad={() => {
-              loaded();
               props.preview.loaded();
               props.restoreSelection();
               props.preview.send({ type: 'studio:interactive', enabled: false });
-              props.preview.send({ type: 'avb:patch-now' });
+              // The render subscription catches edits made during navigation. A load-time
+              // pull races that render and repeats work for every page switch.
             }}
           />
         </div>

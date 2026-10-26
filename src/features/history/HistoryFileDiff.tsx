@@ -22,7 +22,7 @@ export default function HistoryFileDiff({
   readonly commit: HistoryCommit;
   readonly file: HistoryCommitFile;
   readonly onBack: () => void;
-  readonly onRestore: () => void;
+  readonly onRestore?: (() => void) | undefined;
 }) {
   const [revision, setRevision] = useState(0);
   const state = useHistoryDiff(projectPath, commit.hash, file, revision);
@@ -33,7 +33,7 @@ export default function HistoryFileDiff({
           <ChevronLeftIcon size={12} /> All files
         </button>
         <span className="history-diff-path">{file.path}</span>
-        <button onClick={onRestore}>Restore file…</button>
+        {onRestore && <button onClick={onRestore}>Restore file…</button>}
       </div>
       <div className="history-diff-comparison">
         {commit.parents[0]?.slice(0, 7) ?? 'Empty tree'} → {commit.shortHash}

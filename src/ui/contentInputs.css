@@ -43,9 +43,6 @@
 .html-toolbar button[aria-label='Italic'] {
   font-style: italic;
 }
-.html-toolbar button[aria-label='Underline'] {
-  text-decoration: underline;
-}
 .html-toolbar .html-source-toggle {
   margin-left: auto;
 }

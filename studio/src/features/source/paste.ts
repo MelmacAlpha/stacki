@@ -3,7 +3,8 @@ import { parsePageTree } from '../../../vendor/stacki/shared/page/pageNode';
 import { namesUsedIn } from '../../../vendor/stacki/src/editor/frontmatterMove';
 import { frontmatterRange } from './frontmatter';
 import { relativeImport, resolveImport } from './imports';
-import { insertFragment, nodesOf, type TreeAction } from './source';
+import { insertFragment } from './sourceOperations';
+import { nodesOf, type TreeAction } from './source';
 import { carriedBindings } from './pasteBindings';
 
 export function pasteEdits(

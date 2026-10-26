@@ -11,7 +11,7 @@ export default function HistoryCommitFiles({
 }: {
   readonly commit: HistoryCommit;
   readonly projectPath: string;
-  readonly onRestoreFile: (commit: HistoryCommit, file: HistoryCommitFile) => void;
+  readonly onRestoreFile?: ((commit: HistoryCommit, file: HistoryCommitFile) => void) | undefined;
 }) {
   const [open, setOpen] = useState(false);
   const files = commit.files;

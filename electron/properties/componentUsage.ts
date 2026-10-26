@@ -15,7 +15,9 @@ import path from 'path';
 import { aliasMap, boundNames, resolveSpec } from '../content/cmsRefs';
 import type { Alias } from '../content/cmsRefs';
 import { MAIN_LIMITS } from '../lib/mainLimits';
-import { sameFilesystemPath } from '../lib/platform';
+import { comparablePath, sameFilesystemPath } from '../lib/platform';
+import { assert } from '../../shared/core/assert';
+import { LIMITS } from '../../shared/core/limits';
 
 const toPosix = (filePath: string): string => filePath.split(path.sep).join('/');
 
@@ -123,6 +125,69 @@ interface InstanceArgs {
   readonly targetPath?: string | undefined;
   readonly name: string;
   readonly aliases?: readonly Alias[];
+  readonly counts?: InstanceCounts;
+}
+
+type InstanceCounts = (target: Pick<InstanceArgs, 'targetPath' | 'name'>) => number;
+const USAGE_NAMES_MAX = 10_000;
+
+/** Scan markup and imports once; all component queries then use bounded maps. */
+export function instanceCounts(
+  source: unknown,
+  file: string,
+  aliases: readonly Alias[],
+): InstanceCounts {
+  const text = String(source ?? '');
+  assert(text.length <= LIMITS.sourceBytesMax, 'Usage source stays within the reader limit');
+  const names = instanceTagCounts(templateOf(text));
+  const imports = importsOf(text, file, aliases);
+  const targets = new Map<string, number>();
+  const bound = new Set<string>();
+  for (const item of imports) {
+    let count = 0;
+    for (const name of item.names) {
+      bound.add(name);
+      count += names.get(name) ?? 0;
+    }
+    const candidates = new Set([...item.candidates].map((candidate) => comparablePath(candidate)));
+    for (const key of candidates) {
+      targets.set(key, (targets.get(key) ?? 0) + count);
+    }
+    if (bound.size > USAGE_NAMES_MAX || targets.size > USAGE_NAMES_MAX) {
+      throw new Error('Component usage exceeds 10,000 import bindings');
+    }
+  }
+  assert(targets.size <= USAGE_NAMES_MAX, 'Usage target index stays bounded');
+  return ({ targetPath, name }) => {
+    if (targetPath) {
+      const count = targets.get(comparablePath(targetPath));
+      if (count !== undefined) {
+        return count;
+      }
+      if (bound.has(name)) {
+        return 0;
+      }
+    }
+    return names.get(name) ?? 0;
+  };
+}
+
+function instanceTagCounts(template: string): ReadonlyMap<string, number> {
+  assert(template.length <= LIMITS.sourceBytesMax, 'Usage template stays within the reader limit');
+  const counts = new Map<string, number>();
+  // This is the same tag grammar as countIn, including its frontmatter exclusion.
+  // Iteration is bounded by the source length; distinct names have a separate cap.
+  for (const match of template.matchAll(/<([A-Za-z][A-Za-z0-9]*)(?=[\s/>])/g)) {
+    const name = match[1];
+    if (name !== undefined) {
+      counts.set(name, (counts.get(name) ?? 0) + 1);
+      if (counts.size > USAGE_NAMES_MAX) {
+        throw new Error('Component usage exceeds 10,000 tag names');
+      }
+    }
+  }
+  assert(counts.size <= USAGE_NAMES_MAX, 'Usage tag index stays bounded');
+  return counts;
 }
 
 /**
@@ -133,28 +198,9 @@ interface InstanceArgs {
  */
 function instancesIn(
   source: unknown,
-  { file, targetPath, name, aliases = [] }: InstanceArgs,
+  { file, targetPath, name, aliases = [], counts }: InstanceArgs,
 ): number {
-  const target = targetPath ? path.resolve(targetPath) : undefined;
-  if (target) {
-    const imports = importsOf(source, file, aliases);
-    const local: string[] = [];
-    for (const imp of imports) {
-      if ([...imp.candidates].some((candidate) => sameFilesystemPath(candidate, target))) {
-        local.push(...imp.names);
-      }
-    }
-    if (local.length) {
-      return local.reduce((total, alias) => total + countIn(source, alias), 0);
-    }
-    // The name is taken by something else here. `import Section from
-    // './ui/Section.astro'` in a file that doesn't use OURS means every
-    // `<Section>` on the page belongs to that one, not to this component.
-    if (imports.some((imp) => imp.names.includes(name))) {
-      return 0;
-    }
-  }
-  return countIn(source, name);
+  return (counts ?? instanceCounts(source, file, aliases))({ targetPath, name });
 }
 
 export interface UsageFile {

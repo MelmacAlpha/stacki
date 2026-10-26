@@ -1,3 +1,6 @@
+import { createPanelCache, usePanelData, type PanelData } from '../../lib/usePanelData';
+import { PanelReadStatus } from '../../ui/PanelReadStatus';
+import type { Result } from '../../../shared/core/result';
 import { cmsTransport } from '../../ipc/editorEnvironment';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Collection } from './cmsSchema';
@@ -40,6 +43,7 @@ interface CollectionGroup {
 }
 
 interface CmsPanelData {
+  readonly state: PanelData<unknown>;
   readonly files: readonly CmsPanelFile[];
   readonly content: CmsPanelContent;
   readonly refresh: () => Promise<void>;
@@ -56,7 +60,7 @@ export default function CmsPanel(props: CmsPanelProps) {
 }
 
 function ProjectCmsPanel(props: CmsPanelProps) {
-  const { files, content, refresh } = useCmsPanelData(props.project.path, props.refreshKey);
+  const { files, content, refresh, state } = useCmsPanelData(props.project.path, props.refreshKey);
   const [creating, setCreating] = useState(false);
   const [openKey, setOpenKey] = useState<string | undefined>(
     props.selectedContent ? CONTENT_KEY : undefined,
@@ -99,9 +103,11 @@ function ProjectCmsPanel(props: CmsPanelProps) {
           />
         )}
         {/* Collections in other Astro files are hidden, so count only visible groups. */}
-        {groups.length === 0 && content.collections.length === 0 && !creating && (
-          <EmptyPanel onCreate={() => setCreating(true)} />
-        )}
+        <PanelReadStatus state={state} label="collections" retry={refresh} />
+        {state.kind === 'ready' &&
+          groups.length === 0 &&
+          content.collections.length === 0 &&
+          !creating && <EmptyPanel onCreate={() => setCreating(true)} />}
       </div>
     </div>
   );
@@ -133,31 +139,42 @@ function useDefaultCmsGroup(
   }, [groups, content, openKey, setOpenKey]);
 }
 
+const EMPTY_FILES: readonly CmsPanelFile[] = [];
+interface CmsCatalog {
+  readonly files: readonly CmsPanelFile[];
+  readonly content: CmsPanelContent;
+}
+const cmsCache = createPanelCache<CmsCatalog>();
 function useCmsPanelData(projectPath: string, refreshKey: string | number): CmsPanelData {
-  const [files, setFiles] = useState<readonly CmsPanelFile[]>([]);
-  const [content, setContent] = useState<CmsPanelContent>(EMPTY_CONTENT);
-  const requestId = useRef(0);
-  const refresh = useCallback(async (): Promise<void> => {
-    const ownRequestId = ++requestId.current;
-    const [fileResult, contentResult] = await Promise.all([
-      readCmsFiles(projectPath),
-      readContentCollections(projectPath),
-    ]);
-    if (ownRequestId !== requestId.current) {
-      return;
-    }
-    setFiles(fileResult.ok ? fileResult.value : []);
-    setContent(contentResult.ok ? contentResult.value : EMPTY_CONTENT);
-  }, [projectPath]);
+  const read = useCallback(() => readCmsCatalog(projectPath), [projectPath]);
+  const { state, refresh } = usePanelData(cmsCache, projectPath, read, cmsTransport.onCmsChanged);
+  // The hook already loads once; only later external refresh keys request another read.
+  const previous = useRef(refreshKey);
   useEffect(() => {
-    void refresh();
-    const dispose = cmsTransport.onCmsChanged(() => void refresh());
-    return () => {
-      requestId.current += 1;
-      dispose();
-    };
+    if (previous.current !== refreshKey) {
+      previous.current = refreshKey;
+      void refresh();
+    }
   }, [refresh, refreshKey]);
-  return { files, content, refresh };
+  return {
+    state,
+    files: state.kind === 'ready' ? state.value.files : EMPTY_FILES,
+    content: state.kind === 'ready' ? state.value.content : EMPTY_CONTENT,
+    refresh,
+  };
+}
+async function readCmsCatalog(projectPath: string): Promise<Result<CmsCatalog, string>> {
+  const [files, content] = await Promise.all([
+    readCmsFiles(projectPath),
+    readContentCollections(projectPath),
+  ]);
+  if (!files.ok) {
+    return files;
+  }
+  if (!content.ok) {
+    return content;
+  }
+  return { ok: true, value: { files: files.value, content: content.value } };
 }
 
 function useCreateCollection(

@@ -1,3 +1,5 @@
+// Goal: collaborators resolve element ownership inside Settings without disruptive toasts.
+// Method: two real browser sessions select, take over, insert children, and release ownership.
 import { chromium, type Page } from 'playwright';
 import assert from 'node:assert/strict';
 import { mkdir } from 'node:fs/promises';
@@ -37,7 +39,7 @@ try {
   await selected(second, 'Heading');
   await locked(second);
   assert.equal(
-    await second.getByRole('alert').count(),
+    await second.locator('.toast').count(),
     0,
     'Selection does not show a blocking toast',
   );
@@ -100,7 +102,7 @@ async function selected(page: Page, name: string) {
 async function locked(page: Page) {
   await page
     .locator('.studio-right')
-    .getByText('is editing this element', { exact: false })
+    .getByRole('heading', { name: 'This element is being edited', exact: true })
     .waitFor();
   await page
     .locator('.studio-right')

@@ -1,7 +1,10 @@
 import path from 'node:path';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { aliasMap } from '../../../vendor/stacki/electron/content/cmsRefs';
-import { instancesIn } from '../../../vendor/stacki/electron/properties/componentUsage';
+import {
+  instanceCounts,
+  instancesIn,
+} from '../../../vendor/stacki/electron/properties/componentUsage';
 import type { ComponentUsageFile } from '../../../vendor/stacki/src/features/palette/paletteModel';
 import { walk, readSource } from '../project/projectServer';
 import { packageComponentFiles } from '../../../vendor/stacki/electron/lib/componentSources';
@@ -21,7 +24,12 @@ export async function scanComponentUsage(root: string, selected?: string) {
   if (targets.length > 1000) {
     throw new Error('Component usage scan exceeds 1000 components');
   }
-  const sources: { readonly file: string; readonly text: string }[] = [];
+  const aliases = aliasMap(root);
+  const sources: {
+    readonly file: string;
+    readonly text: string;
+    readonly counts: ReturnType<typeof instanceCounts>;
+  }[] = [];
   let size = 0;
   for (const file of paths) {
     const text = await readSource(root, file);
@@ -29,15 +37,14 @@ export async function scanComponentUsage(root: string, selected?: string) {
     if (size > 20_000_000) {
       throw new Error('Component usage scan exceeds 20 MB of source');
     }
-    sources.push({ file, text });
+    sources.push({ file, text, counts: instanceCounts(text, path.resolve(root, file), aliases) });
   }
   if (size * (selected ? 1 : targets.length) > 100_000_000) {
     throw new Error('Component usage scan exceeds the source processing limit');
   }
-  const aliases = aliasMap(root);
   return (selected ? [selected] : targets).map((target) => {
     const files: ComponentUsageFile[] = [];
-    for (const { file, text } of sources) {
+    for (const { file, text, counts } of sources) {
       if (file === target) {
         continue;
       }
@@ -45,7 +52,7 @@ export async function scanComponentUsage(root: string, selected?: string) {
         file: path.resolve(root, file),
         targetPath: path.resolve(root, target),
         name: path.basename(target, '.astro'),
-        aliases,
+        counts,
       });
       if (count) {
         files.push({ rel: file, path: file, kind: usageKind(file), count });

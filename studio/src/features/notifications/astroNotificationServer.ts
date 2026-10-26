@@ -2,6 +2,7 @@ import type { ServerResponse } from 'node:http';
 import path from 'node:path';
 import type { ViteDevServer } from 'vite';
 import { createAstroFileMonitor } from '../../../vendor/stacki/electron/project/astroFileMonitor';
+import { MEDIA_EXT } from '../assets/assetStateTypes';
 
 // A dedicated event stream works without a canvas and keeps the site's Vite error overlay
 // out of the editor. Active sessions recheck access without interrupting file notifications.
@@ -18,7 +19,7 @@ export function createAstroNotifications(server: ViteDevServer, root: string) {
   });
   const projectUpdates = createProjectUpdates(clients, root);
   const changed = (event: string, file: string) => {
-    projectUpdates.changed(file);
+    projectUpdates.changed(event, file);
     if (['add', 'unlink', 'addDir', 'unlinkDir'].includes(event)) {
       const relative = path.relative(root, file).split(path.sep).join('/');
       if (relative === 'src' || relative.startsWith('src/')) {
@@ -42,20 +43,28 @@ export function createAstroNotifications(server: ViteDevServer, root: string) {
 
 function createProjectUpdates(clients: ReadonlySet<ServerResponse>, root: string) {
   let timer: ReturnType<typeof setTimeout> | undefined;
+  let assetsChanged = false;
   return {
-    changed: (file: string) => {
+    changed: (event: string, file: string) => {
       const relative = path.relative(root, file).split(path.sep).join('/');
       if (!/^(src|public)(\/|$)/.test(relative)) {
         return;
       }
+      // Source edits do not change the asset catalog. Rescanning it for every
+      // keystroke or drag competes with rendering for every connected editor.
+      assetsChanged ||= MEDIA_EXT.test(relative) || event === 'addDir' || event === 'unlinkDir';
       if (timer !== undefined) {
         return;
       }
       // One notification per burst also covers Markdown, collections, assets and empty folders.
       timer = setTimeout(() => {
         timer = undefined;
+        const events =
+          'event: project-changed\ndata: {}\n\n' +
+          (assetsChanged ? 'event: assets-changed\ndata: {}\n\n' : '');
+        assetsChanged = false;
         for (const client of clients) {
-          if (!client.write('event: project-changed\ndata: {}\n\n')) {
+          if (!client.write(events)) {
             client.end();
           }
         }

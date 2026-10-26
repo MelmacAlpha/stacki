@@ -22,7 +22,7 @@ const panels = [
   { id: 'collections', label: 'Collections', shortcut: '⌥C', Icon: CmsIcon },
   { id: 'variables', label: 'Variables', shortcut: '⌥V', Icon: VariableIcon },
   { id: 'code', label: 'Code', shortcut: 'C', Icon: CodeIcon },
-  { id: 'history', label: 'History', shortcut: '⌥H', Icon: HistoryIcon },
+  { id: 'history', label: 'Git', shortcut: '⌥H', Icon: HistoryIcon },
 ] as const;
 export type Panel = (typeof panels)[number]['id'] | 'ai';
 interface Props {

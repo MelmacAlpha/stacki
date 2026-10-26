@@ -54,6 +54,7 @@ export function publishGit(
   context: PublishGit,
   args: readonly string[],
   input = '',
+  options: { readonly output?: 'trimmed' | 'verbatim' } = {},
 ): Promise<Result<string>> {
   assert(args.length > 0, 'Git command is required');
   assert(input.length <= 64 * 1024 ** 2, 'Git input is bounded');
@@ -69,7 +70,13 @@ export function publishGit(
     detached: process.platform !== 'win32',
     stdio: ['pipe', 'pipe', 'pipe'],
   });
-  return collectPublishCommand(child, path.dirname(context.directory), args[0] ?? 'command', input);
+  return collectPublishCommand(
+    child,
+    path.dirname(context.directory),
+    args[0] ?? 'command',
+    input,
+    options.output ?? 'trimmed',
+  );
 }
 
 function collectPublishCommand(
@@ -77,6 +84,7 @@ function collectPublishCommand(
   root: string,
   command: string,
   input: string,
+  output: 'trimmed' | 'verbatim',
 ): Promise<Result<string>> {
   const monitor = monitorPublishCommand(child, root);
   return new Promise((resolve) => {
@@ -98,7 +106,7 @@ function collectPublishCommand(
       const message = monitor.failure();
       resolve(
         code === 0 && !message
-          ? ok(stdout.trim())
+          ? ok(output === 'verbatim' ? stdout : stdout.trim())
           : err({
               code: 'git',
               message:

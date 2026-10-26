@@ -131,7 +131,10 @@ function GitHubPushOption({
       <button disabled={busy || current} onClick={() => publish('github')}>
         <PublishProviderIcon provider="github" />
         <span>
-          Push to GitHub<small>{description}</small>
+          Push to GitHub
+          <small className={!current && details === undefined ? 'publish-checking' : undefined}>
+            {description}
+          </small>
         </span>
       </button>
       {repositoryURL !== undefined && (

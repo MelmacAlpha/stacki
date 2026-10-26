@@ -230,22 +230,8 @@ export const HTML_TAGS = [
 ];
 
 // Elements that can never hold children (so never any text content).
-export const VOID_TAGS = new Set([
-  'area',
-  'base',
-  'br',
-  'col',
-  'embed',
-  'hr',
-  'img',
-  'input',
-  'link',
-  'meta',
-  'param',
-  'source',
-  'track',
-  'wbr',
-]);
+export { HTML_VOID_TAGS as VOID_TAGS } from '../../shared/page/htmlTags';
+import { HTML_VOID_TAGS as VOID_TAGS } from '../../shared/page/htmlTags';
 
 // Inline (phrasing) tags — the only element content a heading, paragraph, or
 // other text-level container may hold.
