@@ -30,6 +30,7 @@ test('floating tools preserve content while docking and using the canvas', async
   });
   const dom = new JSDOM('<button id="canvas">Canvas</button><div id="root"></div>', {
     pretendToBeVisual: true,
+    url: 'https://stacki.test/',
   });
   for (const key of ['window', 'document', 'HTMLElement', 'Element', 'Node']) {
     global[key] = key === 'window' ? dom.window : dom.window[key];
@@ -37,6 +38,11 @@ test('floating tools preserve content while docking and using the canvas', async
   global.requestAnimationFrame = window.requestAnimationFrame.bind(window);
   global.cancelAnimationFrame = window.cancelAnimationFrame.bind(window);
   window.matchMedia = () => ({ matches: true });
+  const storageDescriptor = Object.getOwnPropertyDescriptor(global, 'localStorage');
+  Object.defineProperty(global, 'localStorage', {
+    configurable: true,
+    value: window.localStorage,
+  });
   global.IS_REACT_ACT_ENVIRONMENT = true;
   const React = require('react');
   const { act } = React;
@@ -58,6 +64,7 @@ test('floating tools preserve content while docking and using the canvas', async
         label: 'Variables',
         hidden,
         minimumSize: { width: 340, height: 220 },
+        storageKey: 'test.variables',
         header: React.createElement('span', undefined, 'Styles'),
       },
       React.createElement('input', { defaultValue: 'draft' }),
@@ -70,8 +77,8 @@ test('floating tools preserve content while docking and using the canvas', async
         ),
     );
   }
-  const render = (hidden = false) =>
-    act(async () => root.render(React.createElement(App, { hidden })));
+  const render = (hidden = false, generation = 0) =>
+    act(async () => root.render(React.createElement(App, { hidden, key: generation })));
   const press = (element, type, extra = {}) =>
     act(async () => {
       element.dispatchEvent(
@@ -84,7 +91,7 @@ test('floating tools preserve content while docking and using the canvas', async
     });
   try {
     await render();
-    const frame = document.querySelector('.dockable-window');
+    let frame = document.querySelector('.dockable-window');
     const input = frame.querySelector('input');
     const sheet = frame.querySelector('.sheet');
     input.value = 'unsaved';
@@ -114,7 +121,7 @@ test('floating tools preserve content while docking and using the canvas', async
     assert.equal(frame.isConnected, true);
     assert.equal(frame.hidden, false);
 
-    const header = frame.querySelector('.dockable-window-header');
+    let header = frame.querySelector('.dockable-window-header');
     const originalLeft = Number.parseInt(frame.style.left, 10);
     await key(header, 'ArrowLeft');
     assert.equal(Number.parseInt(frame.style.left, 10), originalLeft - 10);
@@ -139,12 +146,22 @@ test('floating tools preserve content while docking and using the canvas', async
     await key(header, 'Escape');
     assert.equal(document.querySelector('[aria-label="Color"]') === null, true);
     assert.ok(frame.isConnected, 'Escape closes only the nested picker');
+    const savedPlacement = frame.style.cssText;
+    await render(false, 1);
+    frame = document.querySelector('.dockable-window');
+    header = frame.querySelector('.dockable-window-header');
+    assert.equal(frame.style.cssText, savedPlacement, 'Closing and reopening restores geometry');
     await press(header, 'pointerdown');
     assert.ok(document.querySelector('.window-drag-cover'));
   } finally {
     await act(async () => root.unmount());
     assert.equal(document.querySelector('.window-drag-cover') === null, true);
     assert.equal(document.body.style.cursor, '');
+    if (storageDescriptor) {
+      Object.defineProperty(global, 'localStorage', storageDescriptor);
+    } else {
+      delete global.localStorage;
+    }
     dom.window.close();
   }
 });

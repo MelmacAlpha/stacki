@@ -87,6 +87,7 @@ function VariablesViewBody({
       className="vars-view"
       hidden={hidden ?? false}
       minimumSize={{ width: 560, height: 280 }}
+      storageKey="stacki.window.variables"
       header={<VariablesWindowHeader state={state} />}
     >
       <div className="cms-detail-body vars-body">
@@ -111,13 +112,17 @@ function VariablesViewBody({
 function VariablesWindowHeader({ state }: { readonly state: ReturnType<typeof useVariablesView> }) {
   return (
     <>
-      <button className="ghost cms-back" title="Close" onClick={state.onClose}>
-        <CloseIcon size={13} />
-      </button>
-      <span className="cms-detail-title">{state.group?.label}</span>
-      <span className={`cms-saved ${state.saved ? 'on' : ''}`}>
-        <CheckIcon size={11} /> Saved
-      </span>
+      <div className="vars-window-heading">
+        <button className="ghost cms-back" title="Close" onClick={state.onClose}>
+          <CloseIcon size={13} />
+        </button>
+        <span className="cms-detail-title" title={state.group?.label}>
+          {state.group?.label}
+        </span>
+        <span className={`cms-saved ${state.saved ? 'on' : ''}`}>
+          <CheckIcon size={11} /> Saved
+        </span>
+      </div>
       <input
         maxLength={LIMITS.attrCharsMax}
         className="vars-search"
@@ -126,7 +131,9 @@ function VariablesWindowHeader({ state }: { readonly state: ReturnType<typeof us
         spellCheck={false}
         onChange={(event) => state.setQuery(event.target.value)}
       />
-      <span className="cms-detail-path">{state.file?.rel}</span>
+      <span className="cms-detail-path" title={state.file?.rel}>
+        {state.file?.rel}
+      </span>
     </>
   );
 }

@@ -15,12 +15,13 @@ const MARGIN_PX = 8;
 
 export function initialWindowRectangle(viewport: WindowSize, minimum: WindowSize): WindowRectangle {
   const width = Math.max(minimum.width, Math.min(1040, Math.round(viewport.width * 0.52)));
+  const height = Math.max(minimum.height, Math.round(viewport.height * 0.78));
   return fitWindowRectangle(
     {
-      x: viewport.width - width - 80,
-      y: 96,
+      x: Math.round((viewport.width - width) / 2),
+      y: Math.round((viewport.height - height) / 2),
       width,
-      height: Math.max(minimum.height, Math.round(viewport.height * 0.78)),
+      height,
     },
     viewport,
     minimum,

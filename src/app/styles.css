@@ -6624,6 +6624,16 @@ body > .embed-editor_provenance {
 .vars-body > .props-empty {
   padding-left: var(--vars-inset);
 }
+.vars-view > .dockable-window-header {
+  position: relative;
+}
+.vars-window-heading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  max-width: calc(50% - 108px);
+}
 .vars-view .cms-detail-title,
 .vars-view .cms-detail-path {
   min-width: 0;
@@ -6634,12 +6644,19 @@ body > .embed-editor_provenance {
 .vars-view .cms-saved {
   flex-shrink: 0;
 }
+.vars-view .cms-detail-path {
+  max-width: calc(50% - 140px);
+}
+.vars-view .dockable-window-toggle {
+  margin-left: 0;
+}
 .vars-search {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
   min-width: 80px;
-  flex-shrink: 1;
   height: 24px;
   width: 180px;
-  margin-left: auto;
   padding: 0 8px;
   font-size: 11px;
 }

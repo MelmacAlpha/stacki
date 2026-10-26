@@ -3,25 +3,17 @@ import type { KeyboardEvent, PointerEvent } from 'react';
 import { usePointerDrag } from './usePointerDrag';
 import {
   fitWindowRectangle,
-  initialWindowRectangle,
   resizeWindowRectangle,
   type WindowEdge,
   type WindowSize,
 } from './windowGeometry';
+import { readWindowRectangle, storeWindowRectangle } from './windowPreferences';
 
 // Tool windows and the code editor share geometry, without knowing their dock location.
-export function useWindowRectangle(minimum: WindowSize) {
-  const [rectangle, setRectangle] = useState(() => initialWindowRectangle(viewportSize(), minimum));
+export function useWindowRectangle(minimum: WindowSize, storageKey?: string) {
   const [dragging, setDragging] = useState(false);
+  const [rectangle, setRectangle] = useWindowPlacement(minimum, { storageKey, dragging });
   const startPointer = usePointerDrag();
-  const { width, height } = minimum;
-  useEffect(() => {
-    const fit = (): void => {
-      setRectangle((current) => fitWindowRectangle(current, viewportSize(), { width, height }));
-    };
-    window.addEventListener('resize', fit);
-    return () => window.removeEventListener('resize', fit);
-  }, [width, height]);
   const start = (event: PointerEvent<HTMLDivElement>, edge?: WindowEdge): void => {
     if (event.button !== 0 || event.isPrimary === false) {
       return;
@@ -72,6 +64,35 @@ export function useWindowRectangle(minimum: WindowSize) {
     );
   };
   return { rectangle, dragging, start, onKeyDown };
+}
+
+function useWindowPlacement(
+  minimum: WindowSize,
+  {
+    storageKey,
+    dragging,
+  }: {
+    readonly storageKey: string | undefined;
+    readonly dragging: boolean;
+  },
+) {
+  const [rectangle, setRectangle] = useState(() =>
+    readWindowRectangle(storageKey, viewportSize(), minimum),
+  );
+  const { width, height } = minimum;
+  useEffect(() => {
+    const fit = (): void => {
+      setRectangle((current) => fitWindowRectangle(current, viewportSize(), { width, height }));
+    };
+    window.addEventListener('resize', fit);
+    return () => window.removeEventListener('resize', fit);
+  }, [width, height]);
+  useEffect(() => {
+    if (!dragging) {
+      storeWindowRectangle(storageKey, rectangle);
+    }
+  }, [storageKey, rectangle, dragging]);
+  return [rectangle, setRectangle] as const;
 }
 
 function viewportSize(): WindowSize {

@@ -627,6 +627,7 @@
     "src/features/publishing/PublishWorkflow.tsx",
     "src/ui/useWindowRectangle.ts",
     "src/ui/windowGeometry.ts",
+    "src/ui/windowPreferences.ts",
     "src/ui/windowResizeHandles.css"
   ],
   "adapters": [

@@ -40,6 +40,9 @@ test('every handle enforces bounds and keeps its opposite edge fixed', () => {
 });
 
 test('initial placement and viewport shrink keep the complete window reachable', () => {
+  const centered = initialWindowRectangle(viewport, minimum);
+  assert.ok(Math.abs(centered.x * 2 + centered.width - viewport.width) <= 1);
+  assert.ok(Math.abs(centered.y * 2 + centered.height - viewport.height) <= 1);
   for (const size of [viewport, { width: 620, height: 400 }, { width: 220, height: 160 }]) {
     inside(initialWindowRectangle(size, minimum), size);
     inside(fitWindowRectangle({ ...start, x: 3000, y: -1000 }, size, minimum), size);

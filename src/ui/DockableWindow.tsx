@@ -1,6 +1,6 @@
 import { useRef } from 'react';
 import type { ReactNode } from 'react';
-import { ExternalIcon, MaximizeIcon } from './Icons';
+import { MaximizeIcon, MinimizeIcon } from './Icons';
 import { PopupScopeContext, usePopupScope } from './popupScope';
 import { useWindowRectangle } from './useWindowRectangle';
 import { WindowResizeHandles } from './WindowResizeHandles';
@@ -16,6 +16,7 @@ interface DockableWindowProps {
   readonly header: ReactNode;
   readonly children: ReactNode;
   readonly minimumSize: WindowSize;
+  readonly storageKey?: string;
   readonly hidden?: boolean;
   readonly className?: string;
 }
@@ -23,7 +24,7 @@ interface DockableWindowProps {
 // The dock is owned by the caller, so the same frame can later wrap either sidebar.
 // Keep one DOM tree through mode changes: editors retain focus, drafts and scroll position.
 export default function DockableWindow(props: DockableWindowProps) {
-  const windowState = useWindowRectangle(props.minimumSize);
+  const windowState = useWindowRectangle(props.minimumSize, props.storageKey);
   const { rectangle } = windowState;
   const floating = props.mode === 'floating';
   const surface = useRef<HTMLDivElement>(null);
@@ -63,7 +64,7 @@ export default function DockableWindow(props: DockableWindowProps) {
             aria-label={action}
             onClick={() => props.onModeChange(floating ? 'docked' : 'floating')}
           >
-            {floating ? <MaximizeIcon size={14} /> : <ExternalIcon size={14} />}
+            {floating ? <MaximizeIcon size={14} /> : <MinimizeIcon size={14} />}
           </button>
         </div>
         <div className="dockable-window-body">{props.children}</div>
