@@ -6,7 +6,8 @@ import type { VariableSlot, VariableRename, SlotOffset } from './variableRows';
 import { assert } from '../../../shared/core/assert';
 import { LIMITS } from '../../../shared/core/limits';
 import { buildSheetSlots, stemOf, sectionPrefix, rowRenames } from './variableRows';
-import { createScrollSync } from './variableScroll';
+import type { createScrollSync } from './variableScroll';
+import { useVariableSheetScroll, VariableScrollBar } from './VariableSheetScroll';
 import Cell from './VariableCell';
 import useListReorder from '../../ui/useListReorder';
 import MoreMenu from '../../ui/MoreMenu';
@@ -89,11 +90,6 @@ function sheetOffset(offsets: readonly SlotOffset[], index: number): SlotOffset 
   assert(offset !== undefined, 'Variable table: missing block offset');
   assert(offset.rows >= offset.head, 'Variable table: rows precede their heading');
   return offset;
-}
-function useScrollSync() {
-  const sync = useMemo(createScrollSync, []);
-  useEffect(() => () => sync.dispose(), [sync]);
-  return sync;
 }
 
 function SectionMenu({ onRename, onDuplicate, onDelete }: SectionMenuProps) {
@@ -241,7 +237,8 @@ function useSheet(props: SheetProps) {
   });
   // Owned here rather than by any one table, for the same reason the section
   // drag is: what it coordinates is the tables against each other.
-  const scrollSync = useScrollSync();
+  const scroll = useVariableSheetScroll(blocks, group.columns.length);
+  const scrollSync = scroll.sync;
 
   // The column headings name the selector's modes, not any one group's rows, so
   // they are the sheet's rather than the first table's. Written here, they stay
@@ -249,10 +246,7 @@ function useSheet(props: SheetProps) {
   // happened to be carrying them.
   const headRef = useRef<HTMLDivElement>(null);
   const headStripRef = useRef<HTMLDivElement>(null);
-  useEffect(
-    () => scrollSync?.register(group.columns.length, headStripRef.current ?? undefined),
-    [scrollSync, group.columns.length],
-  );
+  useLayoutEffect(() => scrollSync.register(headStripRef.current ?? undefined), [scrollSync]);
   // The group titles come to rest under this, so its height has to be known
   // rather than guessed — a row's height is set in CSS and read here.
   useLayoutEffect(() => {
@@ -275,7 +269,17 @@ function useSheet(props: SheetProps) {
 
   const single = group.columns.length === 1;
 
-  return { ...props, slots, slotOffsets, rowsDrag, scrollSync, headRef, headStripRef, single };
+  return {
+    ...props,
+    slots,
+    slotOffsets,
+    rowsDrag,
+    scroll,
+    scrollSync,
+    headRef,
+    headStripRef,
+    single,
+  };
 }
 export default function Sheet(props: SheetProps) {
   const state = useSheet(props);
@@ -296,41 +300,44 @@ function SheetView({ state }: { readonly state: ReturnType<typeof useSheet> }) {
   } = state;
   const { slotOffsets, rowsDrag, scrollSync } = state;
   return (
-    <>
-      <SheetHeader state={state} />
-      {blocks.map((block, index) => (
-        <Table
-          key={index}
-          block={block}
-          group={group}
-          onSave={onSave}
-          sectionDrag={{
-            props:
-              block.title !== undefined
-                ? rowsDrag.rowProps(sheetOffset(slotOffsets, index).head)
-                : {},
-            className:
-              block.title !== undefined
-                ? rowsDrag.rowClass(sheetOffset(slotOffsets, index).head)
-                : '',
-          }}
-          onAdd={onAdd}
-          onRename={onRename}
-          onRetitle={onRetitle}
-          onDuplicateSection={onDuplicateSection}
-          onDeleteSection={onDeleteSection}
-          rowsDrag={rowsDrag}
-          slotOffset={sheetOffset(slotOffsets, index).rows}
-          fluidOf={fluidOf}
-          onDraft={onDraft}
-          scrollSync={scrollSync}
-          // The group's headings are the sheet's now; only a matrix, whose
-          // columns are its own, still writes its own.
-          showHead={block.kind === 'matrix'}
-        />
-      ))}
-      {!blocks.length && <div className="props-empty">Nothing matches the search.</div>}
-    </>
+    <div className="vars-sheet">
+      <div className="cms-detail-body vars-body" ref={state.scroll.bodyRef}>
+        <SheetHeader state={state} />
+        {blocks.map((block, index) => (
+          <Table
+            key={index}
+            block={block}
+            group={group}
+            onSave={onSave}
+            sectionDrag={{
+              props:
+                block.title !== undefined
+                  ? rowsDrag.rowProps(sheetOffset(slotOffsets, index).head)
+                  : {},
+              className:
+                block.title !== undefined
+                  ? rowsDrag.rowClass(sheetOffset(slotOffsets, index).head)
+                  : '',
+            }}
+            onAdd={onAdd}
+            onRename={onRename}
+            onRetitle={onRetitle}
+            onDuplicateSection={onDuplicateSection}
+            onDeleteSection={onDeleteSection}
+            rowsDrag={rowsDrag}
+            slotOffset={sheetOffset(slotOffsets, index).rows}
+            fluidOf={fluidOf}
+            onDraft={onDraft}
+            scrollSync={scrollSync}
+            // The group's headings are the sheet's now; only a matrix, whose
+            // columns are its own, still writes its own.
+            showHead={block.kind === 'matrix'}
+          />
+        ))}
+        {!blocks.length && <div className="props-empty">Nothing matches the search.</div>}
+      </div>
+      <VariableScrollBar scroll={state.scroll} />
+    </div>
   );
 }
 
@@ -452,12 +459,14 @@ function useVariableTable(props: TableProps) {
   // are rendered for why they are two boxes rather than one.
   const headRef = useRef<HTMLDivElement>(null);
   const rowsRef = useRef<HTMLDivElement>(null);
-  // Keyed by how many columns this table has: only tables of the same width
-  // have a scroll position worth sharing.
-  useEffect(
-    () => scrollSync?.register(columns.length, rowsRef.current ?? undefined),
-    [scrollSync, columns.length],
-  );
+  useLayoutEffect(() => {
+    const removeRows = scrollSync.register(rowsRef.current ?? undefined);
+    const removeHead = scrollSync.register(headRef.current ?? undefined);
+    return () => {
+      removeRows?.();
+      removeHead?.();
+    };
+  }, [scrollSync, props.showHead]);
   // Whether this table's heading is a name its rows share (renameable) or a
   // comment above them (not — see sectionPrefix).
   const prefix = sectionPrefix(block);
@@ -528,10 +537,7 @@ function TableView({ state }: { readonly state: ReturnType<typeof useVariableTab
             step and each line runs across both. */}
         <TableScrollHead state={state} />
         <TableScrollRows state={state} />
-        {/* No counterpart to the add row here: the scroller's own scrollbar
-            stands in for it. Given one, the bar was pushed a row below the
-            button and read as belonging to whatever came next; without one it
-            sits on the same line, which is also the line it scrolls. */}
+        {/* Adding a variable is a label-side action; values need no extra row. */}
       </div>
     </div>
   );
@@ -722,28 +728,15 @@ function TableScrollHead({ state }: { readonly state: ReturnType<typeof useVaria
 }
 
 function TableScrollRows({ state }: { readonly state: ReturnType<typeof useVariableTable> }) {
-  const {
-    block,
-    onSave,
-    fluidOf,
-    onDraft,
-    scrollSync,
-    columns,
-    valueTemplate,
-    headRef,
-    rowsRef,
-    rowProps,
-  } = state;
+  const { block, onSave, fluidOf, onDraft, scrollSync, columns, valueTemplate, rowsRef, rowProps } =
+    state;
   return (
     <div
       className="vars-scroll-rows"
       ref={rowsRef}
       onScroll={(event) => {
         const { scrollLeft } = event.currentTarget;
-        if (headRef.current) {
-          headRef.current.scrollLeft = scrollLeft;
-        }
-        scrollSync?.broadcast(columns.length, event.currentTarget, scrollLeft);
+        scrollSync.broadcast(event.currentTarget, scrollLeft);
       }}
     >
       {block.rows.map((row, index) => (

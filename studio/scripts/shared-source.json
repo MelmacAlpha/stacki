@@ -557,6 +557,7 @@
     "src/features/variables/FluidBadge.tsx",
     "src/features/variables/VariableCell.tsx",
     "src/features/variables/VariableTable.tsx",
+    "src/features/variables/VariableSheetScroll.tsx",
     "src/features/variables/VariableTypeIcon.tsx",
     "src/features/variables/VariablesPanel.tsx",
     "src/features/variables/VariablesView.tsx",

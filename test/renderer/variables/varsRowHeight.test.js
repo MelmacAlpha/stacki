@@ -53,11 +53,19 @@ const STYLESHEET = `:root {
 .theme-light {
   --selection-background: var(--dark-900);
   --selection-text: var(--light-100);
+  --button-background: var(--light-100);
+  --button-text: var(--dark-900);
+  --card-background: var(--light-200);
+  --card-text: var(--dark-900);
 }
 
 .theme-dark {
   --selection-background: var(--light-100);
   --selection-text: var(--dark-900);
+  --button-background: var(--dark-900);
+  --button-text: var(--light-100);
+  --card-background: var(--dark-900);
+  --card-text: var(--light-200);
 }
 `;
 
@@ -303,6 +311,44 @@ const STYLESHEET = `:root {
        }
        out.headingDrag = { grabbed: !!grabHead, asked: await js('window.__heading || null') };
 
+       // The shared bar lives outside the vertical scroller. Test actual layout,
+       // native scroll events, and resizing rather than synthetic DOM widths.
+       await js('window.__show(1)');
+       await new Promise((r) => setTimeout(r, 200));
+       await js("Object.assign(document.querySelector('.vars-view').style, " +
+         "{ width: '560px', height: '280px' })");
+       await new Promise((r) => setTimeout(r, 200));
+       const scrollSnapshot = () => js("(() => { const bar = " +
+         "document.querySelector('.vars-horizontal-scroll'); const body = " +
+         "document.querySelector('.vars-body'); const strips = " +
+         "[...body.querySelectorAll('.vars-scroll-rows, .vars-scroll-head')]; " +
+         "return { count: document.querySelectorAll('.vars-horizontal-scroll').length, " +
+         "visible: !bar.parentElement.hidden, left: bar.scrollLeft, " +
+         "maximum: bar.scrollWidth - bar.clientWidth, " +
+         "bottom: bar.getBoundingClientRect().bottom, " +
+         "bodyBottom: body.getBoundingClientRect().bottom, scrollTop: body.scrollTop, " +
+         "nameLeft: body.querySelector('.vars-name').getBoundingClientRect().left, " +
+         "strips: strips.map(s => ({ left: s.scrollLeft, " +
+         "maximum: s.scrollWidth - s.clientWidth })), " +
+         "hiddenBars: [...body.querySelectorAll('.vars-scroll-rows')].every(s => " +
+         "getComputedStyle(s).scrollbarWidth === 'none') } })()");
+       out.scrollBefore = await scrollSnapshot();
+       await js("document.querySelector('.vars-horizontal-scroll').scrollLeft = 10000");
+       await new Promise((r) => setTimeout(r, 100));
+       out.scrollEnd = await scrollSnapshot();
+       await js("document.querySelector('.vars-body').scrollTop = 10000");
+       await new Promise((r) => setTimeout(r, 100));
+       out.scrollVertical = await scrollSnapshot();
+       await js("document.querySelector('.vars-scroll-rows').scrollLeft = 12");
+       await new Promise((r) => setTimeout(r, 100));
+       out.scrollGesture = await scrollSnapshot();
+       await js("document.querySelector('.vars-view').style.width = '950px'");
+       await new Promise((r) => setTimeout(r, 200));
+       out.scrollWide = await scrollSnapshot();
+       await js("document.querySelector('.vars-view').style.width = '560px'");
+       await new Promise((r) => setTimeout(r, 200));
+       out.scrollNarrow = await scrollSnapshot();
+
        console.log(JSON.stringify(out));
        app.quit();
      });`,
@@ -318,6 +364,48 @@ const STYLESHEET = `:root {
     // The run reports through JSON, which spells a value it never found as null;
     // a key it never wrote reads as undefined. Either is "not there".
     const present = (value) => value !== null && value !== undefined;
+    const start = out.scrollBefore;
+    const end = out.scrollEnd;
+    check(
+      'one common bar replaces the section bars',
+      start?.count === 1 && start.visible && start.hiddenBars,
+      JSON.stringify(start),
+    );
+    check(
+      'the bar covers the full horizontal range',
+      end?.maximum > 0 &&
+        end.left === end.maximum &&
+        end.strips.length >= 4 &&
+        end.strips.every((strip) => Math.abs(strip.left - Math.min(strip.maximum, end.left)) <= 1),
+      JSON.stringify(end),
+    );
+    check(
+      'the name column stays fixed',
+      start?.nameLeft === end?.nameLeft,
+      JSON.stringify([start?.nameLeft, end?.nameLeft]),
+    );
+    check(
+      'the bar stays below the body while it scrolls vertically',
+      out.scrollVertical?.scrollTop > 0 &&
+        out.scrollVertical.bottom === start?.bottom &&
+        out.scrollVertical.bodyBottom <= out.scrollVertical.bottom,
+      JSON.stringify(out.scrollVertical),
+    );
+    check(
+      'native scrolling in a section updates the shared bar',
+      out.scrollGesture?.left === 12,
+      JSON.stringify(out.scrollGesture),
+    );
+    check(
+      'the bar disappears when all columns fit',
+      out.scrollWide?.visible === false && out.scrollWide.left === 0,
+      JSON.stringify(out.scrollWide),
+    );
+    check(
+      'resizing narrow restores the bar',
+      out.scrollNarrow?.visible === true && out.scrollNarrow.maximum > 0,
+      JSON.stringify(out.scrollNarrow),
+    );
     check('the sheet renders its rows', out.before?.heads > 0, JSON.stringify(out.before));
     check(
       'a name opens a field when clicked',
@@ -348,8 +436,8 @@ const STYLESHEET = `:root {
       JSON.stringify(drift),
     );
     // The names stack carries one line the values stack does not — the "New
-    // variable" row, which has nothing to show on the value side (the scrollbar
-    // sits on that line instead). Anything beyond that is a stack out of step.
+    // variable" row, which has nothing to show on the value side.
+    // Anything beyond that is a stack out of step.
     check(
       'and neither stack has a line the other lacks',
       (out.stacks || []).every((stack) => stack.extraIsAddRow),

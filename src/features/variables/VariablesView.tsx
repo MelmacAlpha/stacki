@@ -90,21 +90,19 @@ function VariablesViewBody({
       storageKey="stacki.window.variables"
       header={<VariablesWindowHeader state={state} />}
     >
-      <div className="cms-detail-body vars-body">
-        <Sheet
-          blocks={state.blocks}
-          group={group}
-          onSave={state.save}
-          onMove={state.move}
-          onAdd={state.add}
-          onRename={state.rename}
-          onRetitle={state.retitle}
-          onDuplicateSection={state.duplicateSection}
-          onDeleteSection={state.deleteSection}
-          fluidOf={state.fluidOf}
-          onDraft={state.noteDraft}
-        />
-      </div>
+      <Sheet
+        blocks={state.blocks}
+        group={group}
+        onSave={state.save}
+        onMove={state.move}
+        onAdd={state.add}
+        onRename={state.rename}
+        onRetitle={state.retitle}
+        onDuplicateSection={state.duplicateSection}
+        onDeleteSection={state.deleteSection}
+        fluidOf={state.fluidOf}
+        onDraft={state.noteDraft}
+      />
     </DockableWindow>
   );
 }
