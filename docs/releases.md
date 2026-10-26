@@ -15,7 +15,7 @@ Use an isolated checkout when other tasks are editing the working directory. Mat
 Studio, Studio release manifest, and npm starter versions. Never move an existing release tag to
 include later changes.
 
-## 0.1.80 updates
+## 0.1.81 updates
 
 - Collaborative edits continue reaching peers during slow saves. Source and draft writes are
   batched, while save confirmations and publishing still wait for persistence.
@@ -29,6 +29,19 @@ include later changes.
   replaces the Draft badge; loading counts and sign-in rate limits provide clearer feedback.
 - Cloud rendering remains dependent on project work and container capacity. These changes do
   not promise instant rendering on every project or add independent per-editor Git branches.
+
+### 0.1.80 release validation
+
+The 0.1.80 release stopped before publication when cross-platform checks exposed two races in
+the new watcher regression. Vite can emit `ready` before `createServer` returns, and its watcher
+coalesces rapid changes to the same file. Waiting for the missed event stalled Linux and one
+macOS run; expecting a second immediate event failed Windows.
+
+The stall reproduced in a local Linux container. The test now checks the public watched-file
+inventory with a bounded wait and uses a separate existing file for the outside-edit case.
+Canonical temporary paths also account for macOS symlinks. It still checks atomic rename,
+staging-file ignores, project ignore rules, outside edits, and route addition/removal. The
+replacement release is 0.1.81; the original tag remains unchanged for diagnosis.
 
 ## 0.1.79 updates
 
