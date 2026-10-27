@@ -101,7 +101,8 @@
   .studio-left[data-variable-selected='true'] {
     display: none;
   }
-  .studio-editor-content .vars-body {
+  /* The body and its sibling scrollbar must inherit the same column sizes. */
+  .studio-editor-content .vars-sheet {
     --vars-name-col: 140px;
     --vars-inset: 12px;
     --vars-col: 220px;

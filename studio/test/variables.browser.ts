@@ -1,3 +1,6 @@
+// Goal: variable edits and floating controls work in the live collaborative editor.
+// Method: use two browser sessions for source edits and undo, real menu clicks,
+// and measured scrollbar alignment at desktop and mobile viewport sizes.
 import { chromium, type Page } from 'playwright';
 import assert from 'node:assert/strict';
 import { mkdir } from 'node:fs/promises';
@@ -26,6 +29,7 @@ for (const page of [first, second]) {
 try {
   await Promise.all([openVariables(first), openVariables(second)]);
   original = await readSource(first);
+  await checkGroupMenu(first);
   const pageSource = await readSource(first, 'src/pages/index.astro');
   await first.getByRole('button', { name: 'Variables', exact: true }).focus();
   await first.keyboard.press('Delete');
@@ -79,6 +83,21 @@ try {
   await first.getByPlaceholder('Search variables').fill('');
   await mkdir('test-results', { recursive: true });
   await first.screenshot({ path: 'test-results/variables.png' });
+  await first
+    .locator('.cms-collection')
+    .filter({ hasText: /^Theme/ })
+    .click();
+  await checkScrollbar(first);
+  await first.setViewportSize({ width: 390, height: 844 });
+  await checkScrollbar(first);
+  await first.getByRole('button', { name: 'Dock window', exact: true }).click();
+  await checkScrollbar(first);
+  await first.setViewportSize({ width: 1440, height: 1000 });
+  await first
+    .locator('.cms-collection')
+    .filter({ hasText: /^:root/ })
+    .click();
+  await first.getByRole('button', { name: 'Undock window', exact: true }).click();
   await first.setViewportSize({ width: 390, height: 844 });
   await first.getByPlaceholder('Search variables').fill('--brand-500');
   assert.ok(await variableField(first, '--brand-500').isVisible());
@@ -90,6 +109,21 @@ try {
   console.log(
     'Variables: modes, search, source edits, two-browser refresh, undo/redo, add, rename and mobile passed.',
   );
+} catch (error: unknown) {
+  console.error(
+    'Scrollbar geometry at failure:',
+    await first
+      .locator('.vars-horizontal-scroll, .vars-scroll-head, .vars-scroll-rows')
+      .evaluateAll((elements) =>
+        elements.map((element) => ({
+          className: element.getAttribute('class') ?? '',
+          viewport: element.clientWidth,
+          maximum: element.scrollWidth - element.clientWidth,
+          left: element.scrollLeft,
+        })),
+      ),
+  );
+  throw error;
 } finally {
   if (original !== undefined) {
     const base = await readSource(first);
@@ -111,8 +145,60 @@ async function openVariables(page: Page) {
     .filter({ has: page.locator('.label', { hasText: /^Heading$/ }) })
     .click();
   await page.getByRole('button', { name: 'Variables', exact: true }).click();
-  await page.locator('.cms-collection').filter({ hasText: 'base.css' }).click();
+  // The only stylesheet is selected automatically and its groups replace the file list.
   await page.getByPlaceholder('Search variables').waitFor();
+}
+async function checkGroupMenu(page: Page) {
+  await page.locator('.vars-section').first().hover();
+  await page.getByRole('button', { name: 'Group options', exact: true }).first().click();
+  assert.deepEqual(await page.getByRole('menuitem').allTextContents(), [
+    'Rename',
+    'Duplicate',
+    'Delete',
+  ]);
+  // Playwright hit-tests the click, so a menu hidden behind the frame cannot pass.
+  await page.getByRole('menuitem', { name: 'Rename', exact: true }).click();
+  const input = page.locator('.vars-section .vars-rename-input');
+  await input.waitFor();
+  assert.equal(await input.inputValue(), 'Swatches');
+  await input.press('Escape');
+}
+async function checkScrollbar(page: Page) {
+  const bar = page.locator('.vars-horizontal-scroll');
+  await bar.waitFor({ state: 'visible' });
+  await page.waitForFunction(() => {
+    const bar = document.querySelector<HTMLElement>('.vars-horizontal-scroll');
+    const strip = document.querySelector<HTMLElement>('.vars-sheet-head .vars-scroll-head');
+    if (!bar || !strip) {
+      return false;
+    }
+    return (
+      bar.clientWidth === strip.clientWidth &&
+      bar.scrollWidth === strip.scrollWidth &&
+      bar.getBoundingClientRect().left === strip.getBoundingClientRect().left
+    );
+  });
+  // ResizeObserver updates the scroll coordinator after layout; wait for that
+  // frame and its React commit before starting a new scrollbar gesture.
+  await page.evaluate(
+    () =>
+      new Promise<void>((resolve) =>
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+      ),
+  );
+  await bar.evaluate((element) => {
+    element.scrollLeft = element.scrollWidth;
+  });
+  await page.waitForFunction(() => {
+    const bar = document.querySelector<HTMLElement>('.vars-horizontal-scroll');
+    // Empty sections have no overflow; the shared heading carries all Theme columns.
+    const strip = document.querySelector<HTMLElement>('.vars-sheet-head .vars-scroll-head');
+    if (!bar || !strip) {
+      return false;
+    }
+    const maximum = strip.scrollWidth - strip.clientWidth;
+    return maximum > 0 && bar.scrollLeft === maximum && strip.scrollLeft === maximum;
+  });
 }
 function variableField(page: Page, name: string) {
   return page

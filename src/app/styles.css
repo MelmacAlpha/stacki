@@ -6621,6 +6621,7 @@ body > .embed-editor_provenance {
   overflow: hidden;
   --vars-inset: 24px;
   --vars-name-col: 200px;
+  --vars-column-gap: 10px;
   --vars-col-min: 180px;
   --vars-col: 260px;
 }
@@ -6637,7 +6638,10 @@ body > .embed-editor_provenance {
 }
 .vars-scrollbar-row:not([hidden]) {
   display: grid;
-  grid-template-columns: calc(var(--vars-inset) + 18px + var(--vars-name-col)) minmax(0, 1fr);
+  /* Include the label row's gap so the bar and value strips have identical ranges. */
+  grid-template-columns:
+    calc(var(--vars-inset) + 18px + var(--vars-name-col) + var(--vars-column-gap))
+    minmax(0, 1fr);
   flex-shrink: 0;
   padding-block: 3px;
   border-top: 1px solid var(--border);
@@ -6851,7 +6855,8 @@ body > .embed-editor_provenance {
 
 .vars-menu,
 .more-menu {
-  z-index: 60;
+  /* Menus portal to the document and must clear floating tool windows at 250. */
+  z-index: 300;
   min-width: 150px;
   padding: 4px;
   border: 1px solid var(--border);
@@ -6900,7 +6905,7 @@ body > .embed-editor_provenance {
 .vars-row {
   display: grid;
   align-items: center;
-  column-gap: 10px;
+  column-gap: var(--vars-column-gap);
   min-width: min-content;
   padding: 2px 0;
   /* Every row is the same height, heading or not: the field inside a value row

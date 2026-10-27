@@ -19,6 +19,8 @@
 // this mounts the real sheet with the real stylesheet in a real browser, clicks
 // a name, and measures the row it is in. jsdom would report every height as
 // zero and be perfectly happy.
+// Hit-testing the menu and measuring scroll ranges with Studio's mobile styles
+// also catch overlays that exist in the DOM but cannot receive pointer input.
 
 const fs = require('fs');
 const os = require('os');
@@ -159,7 +161,10 @@ const STYLESHEET = `:root {
      app.whenReady().then(async () => {
        const win = new BrowserWindow({ show: false, width: 1000, height: 800 });
        await win.loadFile(${JSON.stringify(path.join(buildDirectory, 'index.html'))});
-       const js = (code) => win.webContents.executeJavaScript(code);
+       const js = (code) => win.webContents.executeJavaScript(code).catch((error) => {
+         console.error('Failed renderer probe:', code);
+         throw error;
+       });
        const pointerAt = (type, x, y) => js(
          "(() => { const target = " +
            (type === 'pointerdown' ? "document.elementFromPoint(" + x + "," + y + ")" : "window") +
@@ -201,8 +206,19 @@ const STYLESHEET = `:root {
          "i.textContent.trim()), justify: getComputedStyle(items[0]).justifyContent, " +
          "iconLefts: items.map((i) => " +
          "Math.round(i.querySelector('svg').getBoundingClientRect().left - m.left)), " +
-         "sameStart: new Set(items.map((i) => " +
+         "reachable: items.every((item) => { const r = item.getBoundingClientRect(); " +
+         "return item.contains(document.elementFromPoint(r.left + r.width / 2, " +
+         "r.top + r.height / 2)) }), sameStart: new Set(items.map((i) => " +
          "Math.round(i.querySelector('svg').getBoundingClientRect().left))).size === 1 } })()");
+       // A coordinate-based click must reach Rename through the floating frame.
+       await js("(() => { const item = document.querySelector('.more-menu-item'); " +
+         "const r = item.getBoundingClientRect(); const target = document.elementFromPoint(" +
+         "r.left + r.width / 2, r.top + r.height / 2); " +
+         "if (item.contains(target)) target.click() })()");
+       await new Promise((r) => setTimeout(r, 200));
+       out.menuRename = await js("!!document.querySelector('.vars-section .vars-rename-input')");
+       await js("document.querySelector('.vars-section .vars-rename-input')?.dispatchEvent(" +
+         "new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))");
        out.before = await js("(() => { const rows = [...document.querySelectorAll('.vars-fixed " +
          ".vars-row')]; const name = rows.find((r) => (r.textContent || " +
          "'').includes('light-100')); const next = rows[rows.indexOf(name) + 1]; " +
@@ -325,10 +341,12 @@ const STYLESHEET = `:root {
          "return { count: document.querySelectorAll('.vars-horizontal-scroll').length, " +
          "visible: !bar.parentElement.hidden, left: bar.scrollLeft, " +
          "maximum: bar.scrollWidth - bar.clientWidth, " +
+         "viewport: bar.clientWidth, start: bar.getBoundingClientRect().left, " +
          "bottom: bar.getBoundingClientRect().bottom, " +
          "bodyBottom: body.getBoundingClientRect().bottom, scrollTop: body.scrollTop, " +
          "nameLeft: body.querySelector('.vars-name').getBoundingClientRect().left, " +
          "strips: strips.map(s => ({ left: s.scrollLeft, " +
+         "viewport: s.clientWidth, start: s.getBoundingClientRect().left, " +
          "maximum: s.scrollWidth - s.clientWidth })), " +
          "hiddenBars: [...body.querySelectorAll('.vars-scroll-rows')].every(s => " +
          "getComputedStyle(s).scrollbarWidth === 'none') } })()");
@@ -349,9 +367,21 @@ const STYLESHEET = `:root {
        await new Promise((r) => setTimeout(r, 200));
        out.scrollNarrow = await scrollSnapshot();
 
+       // Studio changes column sizes below 700px. The common bar must inherit
+       // those sizes too, including the gap between the grip and the name.
+       await win.webContents.insertCSS(${JSON.stringify(
+         fs.readFileSync(repoPath('studio/src/app/studio.css'), 'utf8'),
+       )});
+       await js("document.getElementById('root').className = 'studio-editor-content'");
+       win.setSize(390, 800);
+       await new Promise((r) => setTimeout(r, 200));
+       await js("document.querySelector('.vars-horizontal-scroll').scrollLeft = 10000");
+       await new Promise((r) => setTimeout(r, 100));
+       out.scrollMobile = await scrollSnapshot();
+
        console.log(JSON.stringify(out));
        app.quit();
-     });`,
+     }).catch((error) => { console.error(error); app.exit(1); });`,
   );
 
   const { spawnSync } = require('child_process');
@@ -366,6 +396,25 @@ const STYLESHEET = `:root {
     const present = (value) => value !== null && value !== undefined;
     const start = out.scrollBefore;
     const end = out.scrollEnd;
+    for (const [layout, snapshot] of [
+      ['desktop', end],
+      ['mobile', out.scrollMobile],
+    ]) {
+      check(
+        `${layout} scrollbar aligns with every value strip`,
+        snapshot?.strips.every(
+          (strip) => strip.viewport === snapshot.viewport && strip.start === snapshot.start,
+        ),
+        JSON.stringify(snapshot),
+      );
+      check(
+        `${layout} scrollbar reaches the complete content range without snapping back`,
+        snapshot?.left > 0 &&
+          snapshot.left === snapshot.maximum &&
+          snapshot.maximum === Math.max(...snapshot.strips.map((strip) => strip.maximum)),
+        JSON.stringify(snapshot),
+      );
+    }
     check(
       'one common bar replaces the section bars',
       start?.count === 1 && start.visible && start.hiddenBars,
@@ -444,6 +493,8 @@ const STYLESHEET = `:root {
       JSON.stringify((out.stacks || []).map((stack) => stack.counts)),
     );
     check('the heading has a menu', present(out.menuRows), String(out.menu));
+    check('every menu action receives pointer input', out.menuRows?.reachable === true);
+    check('clicking Rename opens the section field', out.menuRename === true);
     check(
       'offering rename, duplicate and delete',
       out.menuRows?.labels.join('|') === 'Rename|Duplicate|Delete',
