@@ -15,6 +15,21 @@ Use an isolated checkout when other tasks are editing the working directory. Mat
 Studio, Studio release manifest, and npm starter versions. Never move an existing release tag to
 include later changes.
 
+## 0.1.84 release validation
+
+This release retains the application updates below and corrects the Linux installation probe.
+The 0.1.83 Linux regression suite passed, but its packaged-app smoke test still called
+`terminal:start` without the dimensions required by the terminal startup update. Publication
+stopped before the draft became public; the 0.1.83 tag remains unchanged.
+
+A local regression executes the actual generated renderer probe against the shared IPC parser.
+It reproduced the same `Expected number` error, then passed after the probe supplied an 80-column,
+24-row startup grid. A typed fixture now checks required IPC fields during compilation, and the
+runtime test checks startup, command output handling, and cleanup. Native packaged Linux terminal
+verification remains required in the hosted installation checks.
+
+Desktop, the Studio source bundle, and the npm installer are aligned at version 0.1.84.
+
 ## 0.1.83 release validation
 
 This release contains the 0.1.82 updates below with corrected cross-platform test setup.
@@ -29,7 +44,8 @@ pass on Linux and macOS. Application behavior is unchanged by this test correcti
 Windows reported the same three failures. A local Windows runner is unavailable, so the hosted
 Windows regression gate remains required to confirm the fix there before publication.
 
-Desktop, the Studio source bundle, and the npm installer now use version 0.1.83.
+Versions were aligned at 0.1.83, but the packaged Linux check described above stopped publication.
+The npm installer remained at 0.1.82.
 
 ## 0.1.82 updates
 
