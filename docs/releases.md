@@ -15,6 +15,22 @@ Use an isolated checkout when other tasks are editing the working directory. Mat
 Studio, Studio release manifest, and npm starter versions. Never move an existing release tag to
 include later changes.
 
+## 0.1.83 release validation
+
+This release contains the 0.1.82 updates below with corrected cross-platform test setup.
+The 0.1.82 Desktop release remained unpublished after Linux failed three scrollbar assertions;
+its npm installer had already published successfully. The existing tag remains unchanged.
+
+The failure reproduced in a local Linux container with Electron's sandbox enabled. An unmapped,
+hidden BrowserWindow delayed native scroll and ResizeObserver notifications. Disabling background
+throttling alone did not fix it. The layout probe now maps its window without taking focus and
+waits for bounded, measured synchronization instead of short sleeps. All 36 original assertions
+pass on Linux and macOS. Application behavior is unchanged by this test correction.
+Windows reported the same three failures. A local Windows runner is unavailable, so the hosted
+Windows regression gate remains required to confirm the fix there before publication.
+
+Desktop, the Studio source bundle, and the npm installer now use version 0.1.83.
+
 ## 0.1.82 updates
 
 - Variables open in a dockable, resizable window. Group menus remain clickable above the window,

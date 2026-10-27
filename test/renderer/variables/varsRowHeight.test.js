@@ -159,8 +159,14 @@ const STYLESHEET = `:root {
     `const { app, BrowserWindow } = require('electron');
      app.on('window-all-closed', () => app.quit());
      app.whenReady().then(async () => {
-       const win = new BrowserWindow({ show: false, width: 1000, height: 800 });
+       // Native scroll and ResizeObserver delivery need a mapped window on Linux.
+       // Keep it rendering without taking focus from the user's current window.
+       const win = new BrowserWindow({
+         show: false, width: 1000, height: 800,
+         webPreferences: { backgroundThrottling: false },
+       });
        await win.loadFile(${JSON.stringify(path.join(buildDirectory, 'index.html'))});
+       win.showInactive();
        const js = (code) => win.webContents.executeJavaScript(code).catch((error) => {
          console.error('Failed renderer probe:', code);
          throw error;
@@ -350,22 +356,37 @@ const STYLESHEET = `:root {
          "maximum: s.scrollWidth - s.clientWidth })), " +
          "hiddenBars: [...body.querySelectorAll('.vars-scroll-rows')].every(s => " +
          "getComputedStyle(s).scrollbarWidth === 'none') } })()");
-       out.scrollBefore = await scrollSnapshot();
+       // Poll real geometry for at most two seconds. A fixed sleep can finish
+       // before the compositor delivers scroll events or resize notifications.
+       const waitForScroll = async (ready) => {
+         let snapshot = await scrollSnapshot();
+         for (let attempt = 0; attempt < 100; attempt++) {
+           if (ready(snapshot)) return snapshot;
+           await new Promise((resolve) => setTimeout(resolve, 20));
+           snapshot = await scrollSnapshot();
+         }
+         return snapshot;
+       };
+       const aligned = (snapshot) => snapshot.visible && snapshot.maximum > 0 &&
+         snapshot.strips.every((strip) => strip.viewport === snapshot.viewport &&
+           strip.start === snapshot.start) &&
+         snapshot.maximum === Math.max(...snapshot.strips.map((strip) => strip.maximum));
+       const synchronized = (snapshot) => snapshot.strips.every((strip) =>
+         Math.abs(strip.left - Math.min(strip.maximum, snapshot.left)) <= 1);
+       out.scrollBefore = await waitForScroll(aligned);
        await js("document.querySelector('.vars-horizontal-scroll').scrollLeft = 10000");
-       await new Promise((r) => setTimeout(r, 100));
-       out.scrollEnd = await scrollSnapshot();
+       out.scrollEnd = await waitForScroll((snapshot) => aligned(snapshot) &&
+         snapshot.left === snapshot.maximum && synchronized(snapshot));
        await js("document.querySelector('.vars-body').scrollTop = 10000");
-       await new Promise((r) => setTimeout(r, 100));
-       out.scrollVertical = await scrollSnapshot();
+       out.scrollVertical = await waitForScroll((snapshot) => snapshot.scrollTop > 0);
        await js("document.querySelector('.vars-scroll-rows').scrollLeft = 12");
-       await new Promise((r) => setTimeout(r, 100));
-       out.scrollGesture = await scrollSnapshot();
+       out.scrollGesture = await waitForScroll((snapshot) =>
+         snapshot.left === 12 && synchronized(snapshot));
        await js("document.querySelector('.vars-view').style.width = '950px'");
-       await new Promise((r) => setTimeout(r, 200));
-       out.scrollWide = await scrollSnapshot();
+       out.scrollWide = await waitForScroll((snapshot) => !snapshot.visible &&
+         snapshot.strips.every((strip) => strip.maximum === 0));
        await js("document.querySelector('.vars-view').style.width = '560px'");
-       await new Promise((r) => setTimeout(r, 200));
-       out.scrollNarrow = await scrollSnapshot();
+       out.scrollNarrow = await waitForScroll(aligned);
 
        // Studio changes column sizes below 700px. The common bar must inherit
        // those sizes too, including the gap between the grip and the name.
@@ -374,10 +395,11 @@ const STYLESHEET = `:root {
        )});
        await js("document.getElementById('root').className = 'studio-editor-content'");
        win.setSize(390, 800);
-       await new Promise((r) => setTimeout(r, 200));
+       await waitForScroll((snapshot) => aligned(snapshot) &&
+         snapshot.viewport < out.scrollNarrow.viewport);
        await js("document.querySelector('.vars-horizontal-scroll').scrollLeft = 10000");
-       await new Promise((r) => setTimeout(r, 100));
-       out.scrollMobile = await scrollSnapshot();
+       out.scrollMobile = await waitForScroll((snapshot) => aligned(snapshot) &&
+         snapshot.left === snapshot.maximum && synchronized(snapshot));
 
        console.log(JSON.stringify(out));
        app.quit();
