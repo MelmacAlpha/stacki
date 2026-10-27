@@ -1664,7 +1664,8 @@ html[data-platform='win32'] .titlebar {
 
 .asset-grid {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
+  /* Keep empty tracks so a sparse folder retains the same compact thumbnail size. */
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 100px), 1fr));
   gap: 10px;
   padding: 8px 2px;
 }
@@ -4701,13 +4702,13 @@ body > .embed-editor_provenance {
   flex-direction: column;
   background: #000;
 }
-/* Interactive WebGL backdrop; content stacks above it. */
+/* The static wave remains when motion or hardware cannot afford WebGL. */
 .welcome-bg {
   position: absolute;
   inset: 0;
   z-index: 0;
   pointer-events: none;
-  background: #000;
+  background: linear-gradient(108deg, #c9b9c5 0%, #24104e 34%, #1b03a2 49%, #050008 70%);
 }
 .welcome-bg-canvas {
   display: block;

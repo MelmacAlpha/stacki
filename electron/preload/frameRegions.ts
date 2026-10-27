@@ -452,7 +452,7 @@ const addPath = (element: Element, nodePath: string): void => {
 // "copy 2" for a click in the wrong half of itself — and the classes and
 // spacing lists, which are one entry per occurrence, disagree with the boxes.
 export const elementsWithPath = (nodePath: string): Element[] => {
-  const all: Element[] = Array.from(document.querySelectorAll(`[${PATH_ATTR}]`)).filter(
+  const all: Element[] = Array.from(elementsTaggedForPath(nodePath)).filter(
     (element) => pathsOf(element).includes(nodePath) && inFocus(element),
   );
   return all.filter(
@@ -464,7 +464,7 @@ export const elementsWithPath = (nodePath: string): Element[] => {
 // copies outside the focused instance. Measurement still uses the focused set.
 export const allElementsWithPath = (nodePath: string, countMax: number): Element[] | undefined => {
   const all: Element[] = [];
-  const tagged = document.querySelectorAll(`[${PATH_ATTR}]`);
+  const tagged = elementsTaggedForPath(nodePath);
   for (let index = 0; index < tagged.length; index += 1) {
     const element = tagged.item(index);
     if (!element) {
@@ -482,6 +482,17 @@ export const allElementsWithPath = (nodePath: string, countMax: number): Element
     (element) => !all.some((other) => other !== element && other.contains(element)),
   );
 };
+
+function elementsTaggedForPath(nodePath: string): NodeListOf<Element> {
+  // Let the browser filter ordinary paths before allocating arrays or parsing
+  // tags in JavaScript. This stays live, so clones and morphs need no cache
+  // invalidation. Unusual file names use the original exact-token filter rather
+  // than interpolating untrusted quotes, escapes or whitespace into a selector.
+  const selector = /[^A-Za-z0-9_./:|@-]/.test(nodePath)
+    ? `[${PATH_ATTR}]`
+    : `[${PATH_ATTR}~="${nodePath}"]`;
+  return document.querySelectorAll(selector);
+}
 
 // The path a node marks, or undefined when it isn't a marker. `kind` is 's'/'e'.
 const markerPath = (node: Node, kind: 's' | 'e'): string | undefined => {

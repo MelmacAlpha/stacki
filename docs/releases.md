@@ -15,6 +15,20 @@ Use an isolated checkout when other tasks are editing the working directory. Mat
 Studio, Studio release manifest, and npm starter versions. Never move an existing release tag to
 include later changes.
 
+## 0.1.82 updates
+
+- Variables open in a dockable, resizable window. Group menus remain clickable above the window,
+  and the shared horizontal scrollbar aligns with the values on Desktop and mobile Studio.
+- Editor side panels resize and remember their bounded widths. Asset grids add thumbnail columns
+  as the panel widens and keep sparse folders compact.
+- Sibling placement works inside repeated markup containers while preserving source structure.
+- Terminals start with their measured dimensions, avoiding an incorrectly sized first shell prompt.
+- Preview element lookup targets matching paths, and attribute changes avoid unnecessary page
+  reports while structural changes still refresh the page.
+- The welcome background limits resolution and frame rate, pauses when inactive, and uses a
+  static fallback for reduced motion or constrained devices.
+- Desktop, the Studio source bundle, and the npm installer share version 0.1.82.
+
 ## 0.1.81 updates
 
 - Collaborative edits continue reaching peers during slow saves. Source and draft writes are

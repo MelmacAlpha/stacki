@@ -1,3 +1,4 @@
+import type { IpcPayloads } from '../../../shared/ipc/ipcPayloads';
 import type { IpcResults } from '../../../shared/ipc/ipcResults';
 import type { Parser } from '../../../shared/core/boundary';
 import { boolean, count, pathText, record, text } from '../../../shared/core/boundary';
@@ -20,8 +21,8 @@ export interface TerminalProcessEvent {
   readonly name: string;
 }
 
-export function startTerminal(id: string, cwd: string, autoLaunch: string) {
-  const payload = parseIpcPayload('terminal:start', { id, cwd, autoLaunch });
+export function startTerminal(options: IpcPayloads['terminal:start']) {
+  const payload = parseIpcPayload('terminal:start', options);
   return terminalRequest(parseStartResult, () => window.avb.startTerminal(payload));
 }
 

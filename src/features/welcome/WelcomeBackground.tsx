@@ -4,6 +4,7 @@
 // samples to displace its UVs. Ported from the Stacki prototype.
 import { useEffect, useRef } from 'react';
 import { assert } from '../../../shared/core/assert';
+import { welcomeDrawingSize, welcomeFrames, welcomeMotionAllowed } from './welcomeMotion';
 
 const FIELD_SIZE = 64;
 const FIELD_LENGTH = FIELD_SIZE * FIELD_SIZE;
@@ -162,21 +163,63 @@ export default function WelcomeBackground() {
     if (!canvas) {
       return;
     }
-    const gl = canvas.getContext('webgl', { antialias: false, alpha: false });
-    if (!gl) {
+    const memoryGB = 'deviceMemory' in navigator ? navigator.deviceMemory : undefined;
+    if (!welcomeMotionAllowed(navigator.hardwareConcurrency, memoryGB)) {
       return;
     }
-    const resources = welcomeResources(gl);
-    if (!resources) {
+    if (typeof window.matchMedia !== 'function') {
       return;
     }
-    return welcomeAnimate(canvas, gl, resources);
+    const motion = window.matchMedia('(prefers-reduced-motion: reduce)');
+    let stop: (() => void) | undefined;
+    const update = (): void => {
+      stop?.();
+      stop = undefined;
+      canvas.style.visibility = 'hidden';
+      if (!motion.matches) {
+        stop = welcomeStart(canvas);
+      }
+    };
+    const contextLost = (): void => {
+      stop?.();
+      stop = undefined;
+      canvas.style.visibility = 'hidden';
+    };
+    motion.addEventListener('change', update);
+    canvas.addEventListener('webglcontextlost', contextLost);
+    update();
+    return () => {
+      stop?.();
+      motion.removeEventListener('change', update);
+      canvas.removeEventListener('webglcontextlost', contextLost);
+    };
   }, []);
   return (
     <div className="welcome-bg" aria-hidden="true">
-      <canvas ref={canvasRef} className="welcome-bg-canvas" />
+      <canvas ref={canvasRef} className="welcome-bg-canvas" style={{ visibility: 'hidden' }} />
     </div>
   );
+}
+
+function welcomeStart(canvas: HTMLCanvasElement): (() => void) | undefined {
+  // Reject software/major-caveat rendering rather than spending CPU on decoration.
+  const gl = canvas.getContext('webgl', {
+    antialias: false,
+    alpha: false,
+    depth: false,
+    stencil: false,
+    preserveDrawingBuffer: false,
+    powerPreference: 'low-power',
+    failIfMajorPerformanceCaveat: true,
+  });
+  if (!gl) {
+    return undefined;
+  }
+  const resources = welcomeResources(gl);
+  if (!resources) {
+    return undefined;
+  }
+  return welcomeAnimate(canvas, gl, resources);
 }
 function compileShader(
   gl: WebGLRenderingContext,
@@ -344,21 +387,15 @@ function welcomeAnimate(
     velocityX: 0,
     velocityY: 0,
   };
-  let frameId = 0;
   let hasUploadedOnce = false;
   const startTime = performance.now();
   const handleMouseMove = (event: MouseEvent): void => {
     pointer = welcomePointer(pointer, event);
   };
   const render = (now: number) => {
-    const devicePixelRatio = window.devicePixelRatio || 1;
-    const width = Math.max(
-      1,
-      Math.min(16384, Math.floor(canvasElement.clientWidth * devicePixelRatio)),
-    );
-    const height = Math.max(
-      1,
-      Math.min(16384, Math.floor(canvasElement.clientHeight * devicePixelRatio)),
+    const { width, height } = welcomeDrawingSize(
+      canvasElement.clientWidth,
+      canvasElement.clientHeight,
     );
 
     if (canvasElement.width !== width || canvasElement.height !== height) {
@@ -369,7 +406,7 @@ function welcomeAnimate(
 
     // The cursor field decays to ~0 within a few seconds of the pointer
     // going idle. Once it's quiet, skip the costly 3-pass blur + texture
-    // upload (~110k float ops/frame) — but keep drawing every frame so the
+    // upload (~110k float ops/frame) — but keep drawing at the capped rate so the
     // ambient time-based shader motion continues. Always run at least once
     // so the field texture is initialised before the first draw.
     const fieldActive = now - pointer.lastMoveTime < 4000 || pointer.cursorSpeed > 0.0005;
@@ -385,15 +422,14 @@ function welcomeAnimate(
     gl.uniform1f(timeLocation, (now - startTime) / 1000);
     gl.uniform2f(resolutionLocation, width, height);
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
-
-    frameId = window.requestAnimationFrame(render);
+    canvasElement.style.visibility = 'visible';
   };
 
   document.addEventListener('mousemove', handleMouseMove);
-  frameId = window.requestAnimationFrame(render);
+  const stopFrames = welcomeFrames(render);
 
   return () => {
-    window.cancelAnimationFrame(frameId);
+    stopFrames();
     document.removeEventListener('mousemove', handleMouseMove);
     gl.deleteTexture(fieldTexture);
     gl.deleteBuffer(buffer);

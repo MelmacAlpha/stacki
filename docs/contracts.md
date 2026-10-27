@@ -98,6 +98,13 @@ component. Shared parsers cover common records; feature boundary modules such as
 only the fields their consumers use while still validating nested values and
 bounds.
 
+`terminal:start` carries the measured `cols` and `rows` used to spawn the native
+terminal. Startup and resize share positive, bounded dimensions because Windows
+uses signed 16-bit native coordinates. The renderer waits for layout before starting
+and for the startup reply before sending resize requests; it rechecks layout after
+that reply so resizing during a slow launch is not lost. The preload method and
+start result retain their existing names and shape.
+
 Absence is `undefined`, never `null` (AGENTS.md §6): an invoke result states a
 value that is not there as `undefined` (a missing thumbnail, an unknown remote,
 a deleted side of a merge clash, an empty grid cell). Structured clone keeps

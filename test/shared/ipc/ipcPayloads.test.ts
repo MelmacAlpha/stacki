@@ -7,6 +7,7 @@ import {
   IPC_PAYLOADS,
   parseIpcPayload,
   CLIPBOARD_BYTES_MAX,
+  TERMINAL_DIMENSION_MAX,
   parseTerminalAck,
   parseTerminalInput,
 } from '#dist/shared/ipc/ipcPayloads.js';
@@ -358,5 +359,33 @@ test('desktop preferences reject unknown keys and nonboolean toggle values', () 
     { setting: 'usageCountsEnabled' },
   ]) {
     assert.throws(() => parseIpcPayload('settings:set', input));
+  }
+});
+
+test('terminal startup and resize reject unmeasured or unrepresentable native grids', () => {
+  const payload = { id: 'terminal', cwd: '/site', cols: 92, rows: 18 };
+  for (const channel of ['terminal:start', 'terminal:resize'] as const) {
+    assert.equal(parseIpcPayload(channel, payload).cols, 92);
+    assert.equal(parseIpcPayload(channel, payload).rows, 18);
+    assert.equal(parseIpcPayload(channel, { ...payload, cols: 1 }).cols, 1);
+    assert.equal(
+      parseIpcPayload(channel, { ...payload, rows: TERMINAL_DIMENSION_MAX }).rows,
+      TERMINAL_DIMENSION_MAX,
+    );
+    for (const field of ['cols', 'rows'] as const) {
+      for (const value of [
+        undefined,
+        0,
+        -1,
+        1.5,
+        NaN,
+        Infinity,
+        '80',
+        TERMINAL_DIMENSION_MAX + 1,
+      ]) {
+        assert.throws(() => parseIpcPayload(channel, { ...payload, [field]: value }));
+      }
+    }
+    assert.throws(() => parseIpcPayload(channel, { id: 'terminal', cwd: '/site' }));
   }
 });

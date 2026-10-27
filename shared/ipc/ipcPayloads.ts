@@ -33,6 +33,19 @@ import {
 import type { Parsed } from '../core/boundary';
 import { toArray } from '../core/record';
 
+// Native terminal dimensions use positive signed 16-bit coordinates on Windows.
+export const TERMINAL_DIMENSION_MAX = 32_767;
+function terminalDimension(input: unknown): number {
+  const value = count(input);
+  if (value === 0) {
+    throw new Error('Terminal dimension must be positive');
+  }
+  if (value > TERMINAL_DIMENSION_MAX) {
+    throw new Error('Terminal dimension exceeds native limit');
+  }
+  return value;
+}
+
 const nothing = (input: unknown): undefined => {
   if (input !== undefined) {
     throw new Error('Expected no payload');
@@ -303,8 +316,14 @@ export const IPC_PAYLOADS = {
   'style:writeFile': object({ filePath: pathText, css: text }),
   'terminal:clipboardImage': object({ bytes: imageBytes, mime: text }),
   'terminal:close': object({ id: text }),
-  'terminal:resize': object({ id: text, cols: count, rows: count }),
-  'terminal:start': object({ id: text, cwd: pathText, autoLaunch: optional(text) }),
+  'terminal:resize': object({ id: text, cols: terminalDimension, rows: terminalDimension }),
+  'terminal:start': object({
+    id: text,
+    cwd: pathText,
+    cols: terminalDimension,
+    rows: terminalDimension,
+    autoLaunch: optional(text),
+  }),
   'watch:start': pathText,
 } as const;
 

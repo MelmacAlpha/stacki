@@ -404,8 +404,8 @@ async function startTerminal(
   const shellArgs = isWin ? [] : ['-l'];
   const { proc, error } = await spawnWithRetry(shell, shellArgs, {
     name: 'xterm-256color',
-    cols: 80,
-    rows: 24,
+    cols: payload.cols,
+    rows: payload.rows,
     cwd: abs,
     env: buildShellEnv(),
   });

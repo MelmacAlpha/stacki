@@ -526,7 +526,13 @@ const recordKind = (record: MutationRecord): MutationKind => {
     if (ownAttributeChange(record)) {
       return 'none';
     }
-    return record.attributeName === 'style' || insideHead(record.target) ? 'css' : 'page';
+    if (insideHead(record.target)) {
+      return 'css';
+    }
+    // Attributes can change layout, visibility and selector matching, but only
+    // class changes invalidate reported class lists. Any script that responds by
+    // replacing markup produces its own child-list record and structural pass.
+    return record.attributeName === 'class' ? 'page' : 'css';
   }
   if (record.type === 'characterData') {
     const parent = record.target.parentNode;

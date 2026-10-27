@@ -164,11 +164,68 @@ test('a missing native terminal binding does not prevent app startup', async () 
     terminal.registerTerminalHandlers({ send: () => {}, projectRoot: () => process.cwd() });
     const start = handlers.get('terminal:start');
     assert.equal(typeof start, 'function');
-    const result = await start({}, { id: 'test', cwd: process.cwd() });
+    const result = await start({}, { id: 'test', cwd: process.cwd(), cols: 92, rows: 18 });
     assert.equal(result.ok, false);
     assert.match(result.error, /PTY_LOAD_FAILED/);
     assert.equal(nativeLoadCount, 1);
   } finally {
+    Module._load = originalLoad;
+    delete require.cache[terminalPath];
+  }
+});
+
+// Record the real IPC handler's native spawn options so a renderer-only fix cannot
+// accidentally leave ConPTY using its old 80-column, 24-row startup grid.
+test('native terminal starts with the measured grid before its first output', async () => {
+  const handlers = new Map();
+  const ipcMain = { handle: (channel, listener) => handlers.set(channel, listener), on: () => {} };
+  const originalLoad = Module._load;
+  const sizes = [];
+  let spawnOptions;
+  const nativeTerminal = {
+    process: 'powershell.exe',
+    onData: () => {},
+    onExit: () => {},
+    resize: (cols, rows) => sizes.push({ cols, rows }),
+    kill: () => {},
+  };
+  Module._load = function load(request, parent, isMain) {
+    if (request === 'electron') {
+      return { ipcMain };
+    }
+    if (request === 'node-pty') {
+      return {
+        spawn: (_shell, _arguments, options) => {
+          spawnOptions = options;
+          return nativeTerminal;
+        },
+      };
+    }
+    return originalLoad.call(this, request, parent, isMain);
+  };
+  const terminalPath = require.resolve('#dist/electron/terminal/terminal.js');
+  delete require.cache[terminalPath];
+  let terminal;
+  try {
+    terminal = require(terminalPath);
+    terminal.registerTerminalHandlers({ send: () => {}, projectRoot: () => process.cwd() });
+    const result = await handlers.get('terminal:start')(
+      {},
+      {
+        id: 'measured',
+        cwd: process.cwd(),
+        cols: 92,
+        rows: 18,
+      },
+    );
+    assert.deepEqual(result, { ok: true, id: 'measured' });
+    assert.equal(spawnOptions.cols, 92);
+    assert.equal(spawnOptions.rows, 18);
+    assert.deepEqual(sizes, [], 'starting correctly needs no corrective native resize');
+    await handlers.get('terminal:resize')({}, { id: 'measured', cols: 100, rows: 30 });
+    assert.deepEqual(sizes, [{ cols: 100, rows: 30 }]);
+  } finally {
+    terminal?.cleanupTerminals();
     Module._load = originalLoad;
     delete require.cache[terminalPath];
   }
