@@ -134,7 +134,7 @@ export function planInsertNode(
     return resolved;
   }
   const target = resolved.value;
-  if (!placeWritable(target.current, operation.placement)) {
+  if (!placeWritable(currentProjection(context), target.current, operation.placement)) {
     return err('unsupported-operation');
   }
   const current = currentProjection(context);
@@ -234,11 +234,10 @@ function bytesHaveCrlf(bytes: ByteString): boolean {
   return false;
 }
 
-// A node inside a loop is one source node the loop repeats (plan §6). Its own
-// content is edited like any node's (step 7), but the list it sits in is the
-// loop body's code, so nothing is removed from it or placed beside it — with one
-// exception: moving it. That gesture exists to take a node out of its loop, and
-// the move rewrites exactly what would break (the kind-changing class of §3.3).
+// A node inside a loop is one source node the loop repeats (plan §6). A move
+// within its markup container preserves those bytes and bindings. Leaving a
+// loop rewrites only references the destination cannot satisfy (§3.3). The
+// loop's direct return roots remain code-owned, not a markup sibling list.
 export function planMoveNode(
   context: PlanContext,
   anchor: AnchorRef,
@@ -261,7 +260,7 @@ export function planMoveNode(
       return err('unsupported-operation');
     }
   }
-  if (!placeWritable(destination.value.current, operation.placement)) {
+  if (!placeWritable(currentProjection(context), destination.value.current, operation.placement)) {
     return err('unsupported-operation');
   }
   if (startsWith(destination.value.current.path, moved.path)) {
@@ -826,13 +825,26 @@ function shifted(path: readonly number[]): readonly number[] {
 }
 
 // Beside a node, the list it sits in is written; inside it, its own content.
-function placeWritable(node: ProjectedNode, placement: Placement): boolean {
+function placeWritable(
+  projection: ValidProjection,
+  node: ProjectedNode,
+  placement: Placement,
+): boolean {
   if (inside(placement)) {
     if (node.callback === true) {
       return false; // Separate return sites cannot receive one shared sibling insertion.
     }
+    return nodeEditable(node);
   }
-  return inside(placement) ? nodeEditable(node) : nodePlaceable(node);
+  if (node.capability === 'repeated-source-node') {
+    // Repetition is inherited by every descendant. Only the immediate owner
+    // decides whether siblings are markup or separate JavaScript return sites.
+    const parent = nodeAtPath(projection, parentPath(node.path));
+    assert(parent !== undefined, 'A repeated source node has an enclosing owner');
+    assert(node.list === 'markup', 'Repeated source nodes belong to markup syntax');
+    return parent.kind === 'element' || parent.kind === 'component';
+  }
+  return nodePlaceable(node);
 }
 
 function inside(placement: Placement): boolean {
