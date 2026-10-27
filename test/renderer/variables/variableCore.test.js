@@ -1,9 +1,9 @@
-// Pure row planning preserves column holes and heading boundaries. A controlled
-// frame queue checks scroll echoes, cleanup, and registration/collection limits.
+// Pure row planning preserves column holes and heading boundaries. A browser-like
+// clamping peer checks scroll echoes, cleanup, and registration/collection limits.
 const assert = require('node:assert/strict');
 const load = require('../../helpers/rendererModule');
 const rows = load('src/features/variables/variableRows.ts');
-const { createScrollSync } = load('src/features/variables/variableScroll.ts');
+const { createScrollSync, SCROLL_PEERS_MAX } = load('src/features/variables/variableScroll.ts');
 const cell = (name) => ({
   name,
   file: 'tokens.css',
@@ -69,52 +69,56 @@ assert.throws(
   () => rows.stemOf({ ...block, rows: [{ name: '--x', label: 'too long' }] }),
   /label exceeds name/,
 );
-const frames = new Map();
-let nextFrame = 0;
-global.requestAnimationFrame = (callback) => {
-  const id = ++nextFrame;
-  frames.set(id, callback);
-  return id;
-};
-global.cancelAnimationFrame = (id) => frames.delete(id);
-const flush = () => {
-  const pending = [...frames.values()];
-  frames.clear();
-  pending.forEach((callback) => callback());
-};
 const sync = createScrollSync();
-const firstPeer = { scrollLeft: 0 },
-  secondPeer = { scrollLeft: 0 },
-  otherWidth = { scrollLeft: 0 };
-const unregister = sync.register(2, secondPeer);
-sync.register(2, firstPeer);
-sync.register(3, otherWidth);
-sync.broadcast(2, firstPeer, 80);
+const firstPeer = { scrollLeft: 0 };
+const secondPeer = { scrollLeft: 0 };
+let clampedPosition = 0;
+const narrowPeer = {
+  get scrollLeft() {
+    return clampedPosition;
+  },
+  set scrollLeft(value) {
+    clampedPosition = Math.min(40, value);
+  },
+};
+const unregister = sync.register(secondPeer);
+sync.register(firstPeer);
+sync.register(narrowPeer);
+firstPeer.scrollLeft = 80;
+sync.broadcast(firstPeer, 80);
 assert.equal(secondPeer.scrollLeft, 80);
-assert.equal(otherWidth.scrollLeft, 0);
-sync.broadcast(2, secondPeer, 30);
-assert.equal(firstPeer.scrollLeft, 0, 'echoes are suppressed');
-assert.equal(frames.size, 1, 'one frame bounds echo suppression');
-flush();
+assert.equal(narrowPeer.scrollLeft, 40, 'narrower tables clamp at their own end');
+sync.broadcast(narrowPeer, 40);
+assert.equal(firstPeer.scrollLeft, 80, 'delayed clamped echoes preserve the common position');
+secondPeer.scrollLeft = 30;
+sync.broadcast(secondPeer, 30);
+assert.equal(firstPeer.scrollLeft, 30, 'a real gesture immediately takes control');
 unregister();
-sync.broadcast(2, firstPeer, 100);
-assert.equal(secondPeer.scrollLeft, 80, 'unregistered peers stay untouched');
+firstPeer.scrollLeft = 100;
+sync.broadcast(firstPeer, 100);
+assert.equal(secondPeer.scrollLeft, 30, 'unregistered peers stay untouched');
+sync.fit(20);
+assert.equal(firstPeer.scrollLeft, 20, 'resizing clamps the common position');
+assert.equal(narrowPeer.scrollLeft, 20);
+sync.fit(0);
+assert.equal(firstPeer.scrollLeft, 0, 'removing overflow resets the position');
 sync.dispose();
-assert.equal(frames.size, 0, 'unmount cancels the pending frame');
-const oldCleanup = sync.register(2, secondPeer);
+const oldCleanup = sync.register(secondPeer);
 sync.dispose();
-const current = { scrollLeft: 0 };
-sync.register(2, current);
+sync.register(secondPeer);
 oldCleanup();
-sync.broadcast(2, firstPeer, 50);
-assert.equal(current.scrollLeft, 50, 'old cleanup cannot remove a new registration');
+sync.broadcast(firstPeer, 50);
+assert.equal(secondPeer.scrollLeft, 50, 'old cleanup cannot remove a new registration');
+const latePeer = { scrollLeft: 0 };
+sync.register(latePeer);
+assert.equal(latePeer.scrollLeft, 50, 'new sections inherit the current position');
 sync.dispose();
-assert.throws(() => sync.register(-1, current), /nonnegative/);
-assert.throws(() => sync.register(1.5, current), /integer/);
-assert.throws(() => sync.broadcast(2, current, NaN), /finite/);
-for (let index = 0; index < 10000; index++) {
-  sync.register(1, { scrollLeft: 0 });
+assert.throws(() => sync.fit(-1), /nonnegative/);
+assert.throws(() => sync.fit(Infinity), /finite/);
+assert.throws(() => sync.broadcast(firstPeer, NaN), /finite/);
+for (let index = 0; index < SCROLL_PEERS_MAX; index++) {
+  sync.register({ scrollLeft: 0 });
 }
-assert.throws(() => sync.register(1, { scrollLeft: 0 }), /peer limit exceeded/);
+assert.throws(() => sync.register({ scrollLeft: 0 }), /peer limit exceeded/);
 sync.dispose();
 console.log('variable-core: moves, rename rules, bounds, scroll echoes and cleanup passed');

@@ -1012,9 +1012,9 @@ const STYLESHEET = `/* =========================================================
     check('every group ends with a way to add one', !!addRow, swatchTable.innerHTML.slice(-200));
     check('and it reads as a row', addRow.classList.contains('vars-row'));
     check(
-      'the value side leaves that line to the scrollbar',
+      'the value side needs no add-variable row',
       !swatchTable.querySelector('.vars-scroll .vars-add'),
-      'a counterpart row there pushes the scrollbar a line below the button',
+      'adding a variable is a label-side action',
     );
     check(
       'it starts where the names do, not in the middle of the column',

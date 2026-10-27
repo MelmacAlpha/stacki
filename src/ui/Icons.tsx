@@ -363,6 +363,12 @@ export const MaximizeIcon = (props: IconProps) => (
   </I>
 );
 
+export const MinimizeIcon = (props: IconProps) => (
+  <I {...props}>
+    <path d="M5.5 2.5v3h-3M10.5 2.5v3h3M5.5 13.5v-3h-3M10.5 13.5v-3h3" />
+  </I>
+);
+
 export const DesktopIcon = (props: IconProps) => (
   <I {...props}>
     <rect x="2" y="3" width="12" height="8.5" rx="1.2" />

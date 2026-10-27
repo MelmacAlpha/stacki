@@ -1965,6 +1965,7 @@ html[data-platform='win32'] .titlebar {
   overflow: hidden;
 }
 .code-window-header {
+  touch-action: none;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -1994,67 +1995,6 @@ html[data-platform='win32'] .titlebar {
 }
 .code-window-body .cm-host .cm-editor {
   height: 100%;
-}
-
-.cw-rz {
-  position: absolute;
-  z-index: 2;
-}
-.cw-rz-n {
-  top: -3px;
-  left: 8px;
-  right: 8px;
-  height: 6px;
-  cursor: ns-resize;
-}
-.cw-rz-s {
-  bottom: -3px;
-  left: 8px;
-  right: 8px;
-  height: 6px;
-  cursor: ns-resize;
-}
-.cw-rz-e {
-  right: -3px;
-  top: 8px;
-  bottom: 8px;
-  width: 6px;
-  cursor: ew-resize;
-}
-.cw-rz-w {
-  left: -3px;
-  top: 8px;
-  bottom: 8px;
-  width: 6px;
-  cursor: ew-resize;
-}
-.cw-rz-se {
-  right: -3px;
-  bottom: -3px;
-  width: 12px;
-  height: 12px;
-  cursor: nwse-resize;
-}
-.cw-rz-nw {
-  left: -3px;
-  top: -3px;
-  width: 12px;
-  height: 12px;
-  cursor: nwse-resize;
-}
-.cw-rz-sw {
-  left: -3px;
-  bottom: -3px;
-  width: 12px;
-  height: 12px;
-  cursor: nesw-resize;
-}
-.cw-rz-ne {
-  right: -3px;
-  top: -3px;
-  width: 12px;
-  height: 12px;
-  cursor: nesw-resize;
 }
 
 /* Breadcrumbs (canvas toolbar) */
@@ -6636,11 +6576,19 @@ body > .embed-editor_provenance {
    The same sheet the CMS uses, with a table in it. Columns are either the
    rules a variable is declared in (a theme and its modes) or the things a
    family of names describes (h1…h6) — see electron/project/cssVars.ts. */
-.vars-view .cms-detail {
-  width: 100%;
-}
 /* Shared column bounds keep each group's headings and values aligned. Values
    shrink from their preferred width before wide sets need horizontal scroll. */
+.vars-sheet {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  --vars-inset: 24px;
+  --vars-name-col: 200px;
+  --vars-col-min: 180px;
+  --vars-col: 260px;
+}
 .vars-body {
   padding-bottom: 40px;
   /* The sheet's own left/right inset. It lives INSIDE the rows (the first grid
@@ -6649,14 +6597,24 @@ body > .embed-editor_provenance {
      has an edge to sit against. */
   padding-left: 0;
   padding-right: 0;
-  --vars-inset: 24px;
-  --vars-name-col: 200px;
-  --vars-col-min: 180px;
-  --vars-col: 260px;
-  /* One group at a time scrolls sideways (each table's value stack is its own
-     scroller), so the sheet itself never does — otherwise a single wide group
-     would drag every other group's names off with it. */
+  /* Value strips share a position; names remain outside those scrollers. */
   overflow-x: hidden;
+}
+.vars-scrollbar-row:not([hidden]) {
+  display: grid;
+  grid-template-columns: calc(var(--vars-inset) + 18px + var(--vars-name-col)) minmax(0, 1fr);
+  flex-shrink: 0;
+  padding-block: 3px;
+  border-top: 1px solid var(--border);
+  background: var(--bg);
+}
+.vars-horizontal-scroll {
+  grid-column: 2;
+  min-width: 0;
+  height: 14px;
+  overflow-x: scroll;
+  overflow-y: hidden;
+  overscroll-behavior-x: contain;
 }
 /* A group is two stacks: the labels, which never move, and a scroller holding
    its values. Only the right-hand one scrolls, so a row always says what it is
@@ -6667,16 +6625,12 @@ body > .embed-editor_provenance {
   grid-template-columns: auto minmax(0, 1fr);
   align-items: start;
 }
-/* The horizontal bar lands on the group's "New variable" line, because the
-   value side has no row of its own down there — see Table. The bar sits at the
-   bottom of this box, so the padding is what centres it in that line: half a
-   row (15px) puts the bar's own middle (it is 8px tall) on the row's middle. */
 /* The value stack no longer scrolls as one box. A heading has to sit outside a
    horizontal scroller to stick to the sheet — a box that scrolls in x is a
    scroll container in both axes, and `position: sticky` inside one resolves
    against that box, so the headings rode the rows out of sight. The scrolling
    moved down to the rows; the heading strip above them is held level with it
-   from VariablesView. The room for the scrollbar goes with the scroller. */
+   by the sheet's shared scroll coordinator. */
 .vars-scroll {
   min-width: 0;
 }
@@ -6684,7 +6638,11 @@ body > .embed-editor_provenance {
   overflow-x: auto;
   overscroll-behavior-x: contain;
   min-width: 0;
-  padding-bottom: 19px;
+  /* Keep native trackpad scrolling while presenting only the shared bottom bar. */
+  scrollbar-width: none;
+}
+.vars-scroll-rows::-webkit-scrollbar {
+  display: none;
 }
 .vars-scroll-head {
   overflow: hidden;
@@ -6726,10 +6684,39 @@ body > .embed-editor_provenance {
 .vars-body > .props-empty {
   padding-left: var(--vars-inset);
 }
+.vars-view > .dockable-window-header {
+  position: relative;
+}
+.vars-window-heading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  max-width: calc(50% - 108px);
+}
+.vars-view .cms-detail-title,
+.vars-view .cms-detail-path {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.vars-view .cms-saved {
+  flex-shrink: 0;
+}
+.vars-view .cms-detail-path {
+  max-width: calc(50% - 140px);
+}
+.vars-view .dockable-window-toggle {
+  margin-left: 0;
+}
 .vars-search {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  min-width: 80px;
   height: 24px;
   width: 180px;
-  margin-left: auto;
   padding: 0 8px;
   font-size: 11px;
 }

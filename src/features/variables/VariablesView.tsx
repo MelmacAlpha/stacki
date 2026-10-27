@@ -19,6 +19,7 @@ import { fluidCheck, resolveValue } from './fluid';
 import { getHost, setHost } from '../style/model/host';
 import { CloseIcon, CheckIcon } from '../../ui/Icons';
 import Sheet from './VariableTable';
+import DockableWindow, { type WindowMode } from '../../ui/DockableWindow';
 import '../style/utilities.css';
 export { dropPlan, movesForDrop } from './variableRows';
 export { createScrollSync } from './variableScroll';
@@ -29,6 +30,7 @@ export interface VariablesViewProps {
   readonly selected?: VariableSelection | undefined;
   readonly hidden?: boolean;
   readonly onClose?: () => void;
+  readonly onDock?: () => void;
   readonly showToast?: ((message: string, kind: 'error') => void) | undefined;
   readonly onRecordUndo?: ((command: VariableUndo) => void) | undefined;
 }
@@ -53,72 +55,84 @@ function useVariablesView(props: VariablesViewProps) {
 
 export default function VariablesView(props: VariablesViewProps) {
   const state = useVariablesView(props);
-  return <VariablesViewBody state={state} />;
+  const [mode, setMode] = useState<WindowMode>('floating');
+  const changeMode = (next: WindowMode): void => {
+    setMode(next);
+    if (next === 'docked') {
+      props.onDock?.();
+    }
+  };
+  return <VariablesViewBody state={state} mode={mode} onModeChange={changeMode} />;
 }
-function VariablesViewBody({ state }: { readonly state: ReturnType<typeof useVariablesView> }) {
-  const {
-    hidden,
-    onClose,
-    saved,
-    query,
-    setQuery,
-    file,
-    group,
-    save,
-    move,
-    add,
-    rename,
-    retitle,
-    duplicateSection,
-    deleteSection,
-    fluidOf,
-    noteDraft,
-    blocks,
-  } = state;
+function VariablesViewBody({
+  state,
+  mode,
+  onModeChange,
+}: {
+  readonly state: ReturnType<typeof useVariablesView>;
+  readonly mode: WindowMode;
+  readonly onModeChange: (mode: WindowMode) => void;
+}) {
+  const { hidden, file, group } = state;
   if (!group) {
-    return <div className={`cms-view vars-view ${hidden ? 'hidden' : ''}`} />;
+    return undefined;
   }
 
   assert(file !== undefined, 'VariablesView: group must belong to a file');
   return (
-    <div className={`cms-view vars-view ${hidden ? 'hidden' : ''}`}>
-      <div className="cms-detail">
-        <div className="cms-detail-head">
-          <button className="ghost cms-back" title="Close" onClick={onClose}>
-            <CloseIcon size={13} />
-          </button>
-          <span className="cms-detail-title">{group.label}</span>
-          <span className={`cms-saved ${saved ? 'on' : ''}`}>
-            <CheckIcon size={11} /> Saved
-          </span>
-          <input
-            maxLength={LIMITS.attrCharsMax}
-            className="vars-search"
-            value={query}
-            placeholder="Search variables"
-            spellCheck={false}
-            onChange={(event) => setQuery(event.target.value)}
-          />
-          <span className="cms-detail-path">{file.rel}</span>
-        </div>
+    <DockableWindow
+      mode={mode}
+      onModeChange={onModeChange}
+      label="Variables"
+      className="vars-view"
+      hidden={hidden ?? false}
+      minimumSize={{ width: 560, height: 280 }}
+      storageKey="stacki.window.variables"
+      header={<VariablesWindowHeader state={state} />}
+    >
+      <Sheet
+        blocks={state.blocks}
+        group={group}
+        onSave={state.save}
+        onMove={state.move}
+        onAdd={state.add}
+        onRename={state.rename}
+        onRetitle={state.retitle}
+        onDuplicateSection={state.duplicateSection}
+        onDeleteSection={state.deleteSection}
+        fluidOf={state.fluidOf}
+        onDraft={state.noteDraft}
+      />
+    </DockableWindow>
+  );
+}
 
-        <div className="cms-detail-body vars-body">
-          <Sheet
-            blocks={blocks}
-            group={group}
-            onSave={save}
-            onMove={move}
-            onAdd={add}
-            onRename={rename}
-            onRetitle={retitle}
-            onDuplicateSection={duplicateSection}
-            onDeleteSection={deleteSection}
-            fluidOf={fluidOf}
-            onDraft={noteDraft}
-          />
-        </div>
+function VariablesWindowHeader({ state }: { readonly state: ReturnType<typeof useVariablesView> }) {
+  return (
+    <>
+      <div className="vars-window-heading">
+        <button className="ghost cms-back" title="Close" onClick={state.onClose}>
+          <CloseIcon size={13} />
+        </button>
+        <span className="cms-detail-title" title={state.group?.label}>
+          {state.group?.label}
+        </span>
+        <span className={`cms-saved ${state.saved ? 'on' : ''}`}>
+          <CheckIcon size={11} /> Saved
+        </span>
       </div>
-    </div>
+      <input
+        maxLength={LIMITS.attrCharsMax}
+        className="vars-search"
+        value={state.query}
+        placeholder="Search variables"
+        spellCheck={false}
+        onChange={(event) => state.setQuery(event.target.value)}
+      />
+      <span className="cms-detail-path" title={state.file?.rel}>
+        {state.file?.rel}
+      </span>
+    </>
   );
 }
 

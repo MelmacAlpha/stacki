@@ -227,14 +227,16 @@ export function openCanvasPath(app: ShellView, path: string | undefined, occurre
 export function CanvasCovers({ app }: { readonly app: ShellView }) {
   return (
     <>
-      {app.varsGroup && app.leftTab === 'variables' && (
+      {app.varsGroup && (
         <VariablesView
+          key={app.project.path}
           project={app.project}
           selected={app.varsGroup}
           hidden={app.leftTab !== 'variables'}
           showToast={app.showToast}
           onRecordUndo={app.pushCommand}
           onClose={() => app.setVarsGroup(undefined)}
+          onDock={() => app.setLeftTab('variables')}
         />
       )}
       {app.contentName && (
