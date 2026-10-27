@@ -1,4 +1,5 @@
 import { ErrorToast } from '../../ui/ErrorToast';
+import { ResizablePanel } from './ResizablePanel';
 import { desktopElementActions } from './desktopElementActions';
 import { DefaultsCanvasBar } from '../../features/componentDefaults/DefaultsCanvasBar';
 import { DesktopPublishButton } from './DesktopPublishButton';
@@ -332,7 +333,7 @@ export function togglePreview(app: ShellView): void {
 
 export function LeftPanel({ app, tab }: { readonly app: ShellView; readonly tab: LeftTabName }) {
   return (
-    <div className={`panel left ${tab === 'code' ? 'code-panel-shell' : ''}`}>
+    <ResizablePanel kind={tab === 'code' ? 'code' : 'left'}>
       {tab === 'properties' && <PropertiesTab app={app} />}
       {tab === 'pages' && <PagesTab app={app} />}
       {tab === 'navigator' && <NavigatorTab app={app} />}
@@ -357,7 +358,7 @@ export function LeftPanel({ app, tab }: { readonly app: ShellView; readonly tab:
           onRecordUndo={app.pushCommand}
         />
       )}
-    </div>
+    </ResizablePanel>
   );
 }
 

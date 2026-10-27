@@ -2111,6 +2111,7 @@ html[data-platform='win32'] .titlebar {
 }
 
 .panel {
+  position: relative;
   background: var(--bg-panel);
   border-right: 1px solid var(--border);
   display: flex;
@@ -2122,7 +2123,7 @@ html[data-platform='win32'] .titlebar {
   flex-shrink: 0;
 }
 .panel.left.code-panel-shell {
-  width: clamp(360px, 34vw, 620px);
+  width: clamp(360px, 34vw, 600px);
   background: #111111;
 }
 .panel.right {
@@ -2130,6 +2131,40 @@ html[data-platform='win32'] .titlebar {
   flex-shrink: 0;
   border-right: none;
   border-left: 1px solid var(--border);
+}
+
+.panel-resize {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 8px;
+  z-index: 20;
+  cursor: col-resize;
+  touch-action: none;
+  user-select: none;
+}
+.panel.left > .panel-resize {
+  right: -4px;
+}
+.panel.right > .panel-resize {
+  left: -4px;
+}
+.panel-resize::before {
+  content: '';
+  position: absolute;
+  inset: 0 2px;
+}
+.panel-resize:hover::before,
+.panel-resize:focus-visible::before,
+.panel-resize.on::before {
+  background: var(--accent);
+}
+.panel-resize-cover {
+  position: fixed;
+  inset: 0;
+  z-index: 9000;
+  cursor: col-resize;
+  user-select: none;
 }
 
 .code-panel {
